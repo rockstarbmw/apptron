@@ -27,6 +27,7 @@ export const updateCurrentUser = mutation({
       name: identity.name,
       email: identity.email,
       tokenIdentifier: identity.tokenIdentifier,
+      role: "user", // Default role
     });
   },
 });
