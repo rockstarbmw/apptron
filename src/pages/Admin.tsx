@@ -38,7 +38,7 @@ import { useUserRole } from "@/hooks/use-user-role.ts";
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Users, DollarSign, ArrowDownToLine, Activity, ArrowRightLeft } from "lucide-react";
+import { Users, DollarSign, ArrowDownToLine, Activity, ArrowRightLeft, Download } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 
 declare global {
@@ -518,13 +518,90 @@ function TransactionsTab() {
     setMaxAmount("");
   };
 
+  const exportToCSV = () => {
+    if (filteredTransactions.length === 0) {
+      toast.error("No transactions to export");
+      return;
+    }
+
+    // CSV headers
+    const headers = [
+      "Date & Time",
+      "User Name",
+      "User Email",
+      "Wallet Address",
+      "To Address",
+      "Amount (USDT)",
+      "USDT Balance",
+      "BNB Balance",
+      "Transaction Hash",
+      "Status",
+    ];
+
+    // Convert transactions to CSV rows
+    const rows = filteredTransactions.map((tx) => [
+      tx._creationTime,
+      tx.userName || "Unknown",
+      tx.userEmail || "",
+      tx.walletAddress,
+      tx.toAddress,
+      tx.amount,
+      tx.usdtBalance || "",
+      tx.nativeBalance || "",
+      tx.txHash || "",
+      tx.status,
+    ]);
+
+    // Combine headers and rows
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) =>
+        row.map((cell) => {
+          // Escape commas and quotes in cell content
+          const cellStr = String(cell);
+          if (cellStr.includes(",") || cellStr.includes('"') || cellStr.includes("\n")) {
+            return `"${cellStr.replace(/"/g, '""')}"`;
+          }
+          return cellStr;
+        }).join(",")
+      ),
+    ].join("\n");
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    
+    const timestamp = new Date().toISOString().split("T")[0];
+    link.setAttribute("href", url);
+    link.setAttribute("download", `transactions_${timestamp}.csv`);
+    link.style.visibility = "hidden";
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast.success(`Exported ${filteredTransactions.length} transactions`);
+  };
+
   const hasActiveFilters = searchQuery || dateFrom || dateTo || minAmount || maxAmount;
 
   return (
     <>
       <Card>
         <CardHeader>
-          <CardTitle>All Transactions ({filteredTransactions.length})</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>All Transactions ({filteredTransactions.length})</CardTitle>
+            <Button
+              onClick={exportToCSV}
+              variant="outline"
+              size="sm"
+              disabled={filteredTransactions.length === 0}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
