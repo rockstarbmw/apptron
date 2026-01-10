@@ -190,6 +190,9 @@ function OverviewTab() {
 function UsersTab() {
   const users = useQuery(api.admin.getAllUsers);
   const updateUserRole = useMutation(api.admin.updateUserRole);
+  const [selectedTransaction, setSelectedTransaction] = useState<{
+    walletAddress: string;
+  } | null>(null);
 
   async function handleRoleChange(userId: Id<"users">, newRole: "admin" | "user") {
     try {
@@ -205,54 +208,75 @@ function UsersTab() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>All Users ({users.length})</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          {users.map((user) => (
-            <div
-              key={user._id}
-              className="flex items-center justify-between rounded-lg border bg-card p-4"
-            >
-              <div className="space-y-1">
-                <div className="font-semibold">{user.name || "Unknown"}</div>
-                <div className="text-sm text-muted-foreground">
-                  {user.email}
-                </div>
-                {user.walletAddress && (
-                  <div className="font-mono text-xs text-muted-foreground">
-                    {user.walletAddress.slice(0, 10)}...
-                    {user.walletAddress.slice(-8)}
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>All Users ({users.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {users.map((user) => (
+              <div
+                key={user._id}
+                className="flex items-center justify-between rounded-lg border bg-card p-4"
+              >
+                <div className="space-y-1">
+                  <div className="font-semibold">{user.name || "Unknown"}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {user.email}
                   </div>
-                )}
-                <div className="text-xs text-muted-foreground">
-                  Joined: {new Date(user._creationTime).toLocaleDateString()}
+                  {user.walletAddress && (
+                    <div className="font-mono text-xs text-muted-foreground">
+                      {user.walletAddress.slice(0, 10)}...
+                      {user.walletAddress.slice(-8)}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground">
+                    Joined: {new Date(user._creationTime).toLocaleDateString()}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={user.role}
+                    onValueChange={(value: "admin" | "user") =>
+                      handleRoleChange(user._id as Id<"users">, value)
+                    }
+                  >
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="user">User</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {user.walletAddress && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setSelectedTransaction({
+                          walletAddress: user.walletAddress!,
+                        })
+                      }
+                    >
+                      <ArrowRightLeft className="mr-2 h-4 w-4" />
+                      Transfer
+                    </Button>
+                  )}
                 </div>
               </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-              <div className="flex items-center gap-2">
-                <Select
-                  value={user.role}
-                  onValueChange={(value: "admin" | "user") =>
-                    handleRoleChange(user._id as Id<"users">, value)
-                  }
-                >
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="user">User</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+      <TransferDialog
+        transaction={selectedTransaction}
+        onClose={() => setSelectedTransaction(null)}
+      />
+    </>
   );
 }
 
