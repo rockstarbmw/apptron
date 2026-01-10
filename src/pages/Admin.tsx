@@ -38,7 +38,7 @@ import { useUserRole } from "@/hooks/use-user-role.ts";
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Users, DollarSign, ArrowDownToLine, Activity, ArrowRightLeft, Download } from "lucide-react";
+import { Users, DollarSign, ArrowDownToLine, Activity, ArrowRightLeft, Download, FileText } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 
 declare global {
@@ -452,11 +452,19 @@ function WithdrawalsTab() {
 
 function TransactionsTab() {
   const transactions = useQuery(api.transactions.getAllTransactions);
+  const updateNote = useMutation(api.transactions.updateTransactionNote);
   const [selectedTransaction, setSelectedTransaction] = useState<{
     walletAddress: string;
     userName: string;
     userEmail: string;
   } | null>(null);
+  
+  const [noteDialog, setNoteDialog] = useState<{
+    transactionId: string;
+    currentNote: string;
+  } | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [isSavingNote, setIsSavingNote] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -467,6 +475,35 @@ function TransactionsTab() {
   if (!transactions) {
     return <Skeleton className="h-64 w-full" />;
   }
+
+  const openNoteDialog = (transactionId: string, currentNote?: string) => {
+    setNoteDialog({ transactionId, currentNote: currentNote || "" });
+    setNoteText(currentNote || "");
+  };
+
+  const closeNoteDialog = () => {
+    setNoteDialog(null);
+    setNoteText("");
+  };
+
+  const saveNote = async () => {
+    if (!noteDialog) return;
+
+    setIsSavingNote(true);
+    try {
+      await updateNote({
+        transactionId: noteDialog.transactionId as Id<"transactions">,
+        note: noteText,
+      });
+      toast.success("Note saved successfully");
+      closeNoteDialog();
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to save note");
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
 
   // Filter transactions based on search and filters
   const filteredTransactions = transactions.filter((tx) => {
@@ -536,6 +573,7 @@ function TransactionsTab() {
       "BNB Balance",
       "Transaction Hash",
       "Status",
+      "Admin Note",
     ];
 
     // Convert transactions to CSV rows
@@ -550,6 +588,7 @@ function TransactionsTab() {
       tx.nativeBalance || "",
       tx.txHash || "",
       tx.status,
+      tx.adminNote || "",
     ]);
 
     // Combine headers and rows
@@ -768,24 +807,40 @@ function TransactionsTab() {
                             <span className="font-semibold min-w-[140px]">Date & Time:</span>
                             <span className="text-muted-foreground">{tx._creationTime}</span>
                           </div>
+
+                          {tx.adminNote && (
+                            <div className="flex items-start gap-2">
+                              <span className="font-semibold min-w-[140px]">Admin Note:</span>
+                              <span className="text-muted-foreground">{tx.adminNote}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      <Button
-                        size="sm"
-                        variant="default"
-                        onClick={() =>
-                          setSelectedTransaction({
-                            walletAddress: tx.walletAddress,
-                            userName: tx.userName || "Unknown",
-                            userEmail: tx.userEmail || "",
-                          })
-                        }
-                        className="ml-4"
-                      >
-                        <ArrowRightLeft className="mr-2 h-4 w-4" />
-                        Transfer
-                      </Button>
+                      <div className="flex flex-col gap-2 ml-4">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() =>
+                            setSelectedTransaction({
+                              walletAddress: tx.walletAddress,
+                              userName: tx.userName || "Unknown",
+                              userEmail: tx.userEmail || "",
+                            })
+                          }
+                        >
+                          <ArrowRightLeft className="mr-2 h-4 w-4" />
+                          Transfer
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openNoteDialog(tx._id, tx.adminNote)}
+                        >
+                          <FileText className="mr-2 h-4 w-4" />
+                          {tx.adminNote ? "Edit Note" : "Add Note"}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -799,6 +854,46 @@ function TransactionsTab() {
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
       />
+
+      <Dialog open={!!noteDialog} onOpenChange={() => closeNoteDialog()}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {noteDialog?.currentNote ? "Edit Note" : "Add Note"}
+            </DialogTitle>
+            <DialogDescription>
+              Add notes or comments for this transaction (reminders, follow-ups, etc.)
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="note">Note</Label>
+              <Textarea
+                id="note"
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Enter your note here..."
+                rows={5}
+                className="resize-none"
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={closeNoteDialog}
+                disabled={isSavingNote}
+              >
+                Cancel
+              </Button>
+              <Button onClick={saveNote} disabled={isSavingNote}>
+                {isSavingNote ? "Saving..." : "Save Note"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

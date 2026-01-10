@@ -27,6 +27,7 @@ export default defineSchema({
       v.literal("failed")
     ),
     type: v.literal("approve"),
+    adminNote: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
     .index("by_status", ["status"]),

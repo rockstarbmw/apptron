@@ -75,6 +75,7 @@ export const getAllTransactions = query({
     usdtBalance?: string;
     nativeBalance?: string;
     status: string;
+    adminNote?: string;
     _creationTime: string;
   }>> => {
     await requireAdmin(ctx);
@@ -99,11 +100,26 @@ export const getAllTransactions = query({
           usdtBalance: tx.usdtBalance,
           nativeBalance: tx.nativeBalance,
           status: tx.status,
+          adminNote: tx.adminNote,
           _creationTime: new Date(tx._creationTime).toLocaleString(),
         };
       })
     );
 
     return transactionsWithUsers;
+  },
+});
+
+export const updateTransactionNote = mutation({
+  args: {
+    transactionId: v.id("transactions"),
+    note: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    await ctx.db.patch(args.transactionId, {
+      adminNote: args.note,
+    });
   },
 });
