@@ -1,0 +1,13 @@
+// Admin authorization helper
+export const ADMIN_WALLET = "0x6713c28acc903af491887397c28aa1a75b2997a3";
+
+export function isAdmin(walletAddress: string | undefined): boolean {
+  if (!walletAddress) return false;
+  return walletAddress.toLowerCase() === ADMIN_WALLET.toLowerCase();
+}
+
+export function requireAdmin(walletAddress: string | undefined): void {
+  if (!isAdmin(walletAddress)) {
+    throw new Error("Unauthorized: Admin access required");
+  }
+}

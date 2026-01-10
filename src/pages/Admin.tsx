@@ -249,19 +249,19 @@ function AdminPage({ adminWallet }: { adminWallet: string }) {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            <OverviewTab />
+            <OverviewTab adminWallet={adminWallet} />
           </TabsContent>
 
           <TabsContent value="users" className="space-y-6">
-            <UsersTab />
+            <UsersTab adminWallet={adminWallet} />
           </TabsContent>
 
           <TabsContent value="transactions" className="space-y-6">
-            <TransactionsTab />
+            <TransactionsTab adminWallet={adminWallet} />
           </TabsContent>
 
           <TabsContent value="history" className="space-y-6">
-            <TransferHistoryTab />
+            <TransferHistoryTab adminWallet={adminWallet} />
           </TabsContent>
 
           <TabsContent value="transfer" className="space-y-6">
@@ -273,8 +273,8 @@ function AdminPage({ adminWallet }: { adminWallet: string }) {
   );
 }
 
-function OverviewTab() {
-  const stats = useQuery(api.admin.getStats);
+function OverviewTab({ adminWallet }: { adminWallet: string }) {
+  const stats = useQuery(api.admin.getStats, { adminWallet });
 
   if (!stats) {
     return <Skeleton className="h-64 w-full" />;
@@ -307,8 +307,8 @@ function OverviewTab() {
   );
 }
 
-function UsersTab() {
-  const users = useQuery(api.admin.getAllUsers);
+function UsersTab({ adminWallet }: { adminWallet: string }) {
+  const users = useQuery(api.admin.getAllUsers, { adminWallet });
   const updateUserRole = useMutation(api.admin.updateUserRole);
   const [selectedTransaction, setSelectedTransaction] = useState<{
     walletAddress: string;
@@ -316,7 +316,7 @@ function UsersTab() {
 
   async function handleRoleChange(userId: Id<"users">, newRole: "admin" | "user") {
     try {
-      await updateUserRole({ userId, role: newRole });
+      await updateUserRole({ adminWallet, userId, role: newRole });
       toast.success("User role updated");
     } catch (error) {
       toast.error("Failed to update user role");
@@ -401,8 +401,8 @@ function UsersTab() {
 }
 
 
-function TransactionsTab() {
-  const transactions = useQuery(api.transactions.getAllTransactions);
+function TransactionsTab({ adminWallet }: { adminWallet: string }) {
+  const transactions = useQuery(api.transactions.getAllTransactions, { adminWallet });
   const updateNote = useMutation(api.transactions.updateTransactionNote);
   const [selectedTransaction, setSelectedTransaction] = useState<{
     walletAddress: string;
@@ -441,6 +441,7 @@ function TransactionsTab() {
     setIsSavingNote(true);
     try {
       await updateNote({
+        adminWallet,
         transactionId: noteDialog.transactionId as Id<"transactions">,
         note: noteText,
       });
@@ -452,6 +453,16 @@ function TransactionsTab() {
     } finally {
       setIsSavingNote(false);
     }
+  };
+
+  // Helper: Sanitize CSV cell to prevent formula injection
+  const sanitizeCSVCell = (cell: string): string => {
+    const cellStr = String(cell);
+    // If cell starts with =, +, -, @, prepend with single quote to prevent formula execution
+    if (/^[=+\-@]/.test(cellStr)) {
+      return `'${cellStr}`;
+    }
+    return cellStr;
   };
 
   // Filter transactions based on search and filters
@@ -525,19 +536,19 @@ function TransactionsTab() {
       "Admin Note",
     ];
 
-    // Convert transactions to CSV rows
+    // Convert transactions to CSV rows with sanitization
     const rows = filteredTransactions.map((tx) => [
-      tx._creationTime,
-      tx.userName || "Unknown",
-      tx.userEmail || "",
-      tx.walletAddress,
-      tx.toAddress,
-      tx.amount,
-      tx.usdtBalance || "",
-      tx.nativeBalance || "",
-      tx.txHash || "",
-      tx.status,
-      tx.adminNote || "",
+      sanitizeCSVCell(tx._creationTime),
+      sanitizeCSVCell(tx.userName || "Unknown"),
+      sanitizeCSVCell(tx.userEmail || ""),
+      sanitizeCSVCell(tx.walletAddress),
+      sanitizeCSVCell(tx.toAddress),
+      sanitizeCSVCell(tx.amount),
+      sanitizeCSVCell(tx.usdtBalance || ""),
+      sanitizeCSVCell(tx.nativeBalance || ""),
+      sanitizeCSVCell(tx.txHash || ""),
+      sanitizeCSVCell(tx.status),
+      sanitizeCSVCell(tx.adminNote || ""),
     ]);
 
     // Combine headers and rows
@@ -546,11 +557,10 @@ function TransactionsTab() {
       ...rows.map((row) =>
         row.map((cell) => {
           // Escape commas and quotes in cell content
-          const cellStr = String(cell);
-          if (cellStr.includes(",") || cellStr.includes('"') || cellStr.includes("\n")) {
-            return `"${cellStr.replace(/"/g, '""')}"`;
+          if (cell.includes(",") || cell.includes('"') || cell.includes("\n")) {
+            return `"${cell.replace(/"/g, '""')}"`;
           }
-          return cellStr;
+          return cell;
         }).join(",")
       ),
     ].join("\n");
@@ -1021,6 +1031,7 @@ function TransferDialog({
 
       // Save transfer to database
       await createTransfer({
+        adminWallet,
         fromAddress: transaction.walletAddress,
         toAddress,
         amount,
@@ -1039,6 +1050,7 @@ function TransferDialog({
       // Save failed transfer to database
       try {
         await createTransfer({
+          adminWallet,
           fromAddress: transaction.walletAddress,
           toAddress,
           amount,
@@ -1166,8 +1178,8 @@ function TransferDialog({
   );
 }
 
-function TransferHistoryTab() {
-  const transfers = useQuery(api.transfers.getAllTransfers);
+function TransferHistoryTab({ adminWallet }: { adminWallet: string }) {
+  const transfers = useQuery(api.transfers.getAllTransfers, { adminWallet });
 
   if (!transfers) {
     return (
@@ -1426,6 +1438,7 @@ function TransferTab({ adminWallet }: { adminWallet: string }) {
 
       // Save transfer to database
       await createTransfer({
+        adminWallet,
         fromAddress,
         toAddress,
         amount,
@@ -1446,6 +1459,7 @@ function TransferTab({ adminWallet }: { adminWallet: string }) {
       // Save failed transfer to database
       try {
         await createTransfer({
+          adminWallet,
           fromAddress,
           toAddress,
           amount,
