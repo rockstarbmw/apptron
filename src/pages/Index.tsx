@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
+import QRCode from "qrcode";
+import { Button } from "@/components/ui/button.tsx";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog.tsx";
+import { QrCode, Download } from "lucide-react";
+import { toast } from "sonner";
 
 declare global {
   interface Window {
@@ -18,6 +23,8 @@ declare global {
 export default function Index() {
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
+  const [showQR, setShowQR] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState("");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
   useEffect(() => {
@@ -46,6 +53,42 @@ export default function Index() {
 
   function setMax() {
     setAmount("Max");
+  }
+
+  async function generateQRCode() {
+    try {
+      // Get current website URL
+      const websiteUrl = window.location.origin;
+      
+      // Trust Wallet deep link format
+      const deepLink = `https://link.trustwallet.com/browser?url=${encodeURIComponent(websiteUrl)}`;
+      
+      // Generate QR code
+      const dataUrl = await QRCode.toDataURL(deepLink, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: "#000000",
+          light: "#FFFFFF",
+        },
+      });
+      
+      setQrDataUrl(dataUrl);
+      setShowQR(true);
+    } catch (error) {
+      console.error("QR code generation failed:", error);
+      toast.error("Failed to generate QR code");
+    }
+  }
+
+  function downloadQR() {
+    if (!qrDataUrl) return;
+    
+    const link = document.createElement("a");
+    link.href = qrDataUrl;
+    link.download = "trust-wallet-qr.png";
+    link.click();
+    toast.success("QR code downloaded");
   }
 
   return (
@@ -150,6 +193,84 @@ export default function Index() {
       >
         Next
       </button>
+
+      {/* QR Code Button */}
+      <button
+        onClick={generateQRCode}
+        style={{
+          position: "fixed",
+          top: "20px",
+          right: "20px",
+          background: "#25d695",
+          color: "#000",
+          border: "none",
+          borderRadius: "50%",
+          width: "50px",
+          height: "50px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          boxShadow: "0 4px 12px rgba(37, 214, 149, 0.3)",
+        }}
+      >
+        <QrCode size={24} />
+      </button>
+
+      {/* QR Code Dialog */}
+      <Dialog open={showQR} onOpenChange={setShowQR}>
+        <DialogContent className="max-w-sm bg-[#0b0b0b] border-[#252525] text-white">
+          <DialogHeader>
+            <DialogTitle className="text-center text-xl">Scan with Trust Wallet</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="bg-[#151515] rounded-xl p-4 text-center">
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <img 
+                  src="https://trustwallet.com/assets/images/trust_logotype.svg" 
+                  alt="Trust Wallet"
+                  className="h-6"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+                <span className="text-sm text-[#25d695]">USDT BNB Smart Chain</span>
+              </div>
+
+              {qrDataUrl && (
+                <div className="bg-white rounded-lg p-4 inline-block">
+                  <img src={qrDataUrl} alt="QR Code" className="w-64 h-64" />
+                </div>
+              )}
+
+              <div className="mt-4 text-xs text-gray-400 break-all font-mono">
+                {window.location.origin}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant="outline"
+                onClick={downloadQR}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download
+              </Button>
+              <Button
+                onClick={() => setShowQR(false)}
+                className="bg-[#25d695] hover:bg-[#1f8f5f] text-black font-semibold"
+              >
+                Close
+              </Button>
+            </div>
+
+            <div className="text-xs text-gray-400 text-center">
+              Open Trust Wallet → Scan QR → Website will open automatically
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
