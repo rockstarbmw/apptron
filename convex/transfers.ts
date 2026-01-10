@@ -1,8 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireAdmin } from "./adminAuth";
 
 export const createTransfer = mutation({
   args: {
+    adminWallet: v.string(),
     fromAddress: v.string(),
     toAddress: v.string(),
     amount: v.string(),
@@ -12,6 +14,34 @@ export const createTransfer = mutation({
     note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    requireAdmin(args.adminWallet);
+    
+    // Validate addresses (basic hex check)
+    const addressRegex = /^0x[a-fA-F0-9]{40}$/;
+    if (!addressRegex.test(args.fromAddress)) {
+      throw new Error("Invalid from address");
+    }
+    if (!addressRegex.test(args.toAddress)) {
+      throw new Error("Invalid to address");
+    }
+    
+    // Validate tx hash
+    const txHashRegex = /^0x[a-fA-F0-9]{64}$/;
+    if (!txHashRegex.test(args.txHash)) {
+      throw new Error("Invalid transaction hash");
+    }
+    
+    // Validate amount (positive number)
+    const amountNum = parseFloat(args.amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      throw new Error("Invalid amount");
+    }
+    
+    // Validate note length
+    if (args.note && args.note.length > 1000) {
+      throw new Error("Note too long (max 1000 characters)");
+    }
+    
     const transferId = await ctx.db.insert("transfers", {
       fromAddress: args.fromAddress,
       toAddress: args.toAddress,
@@ -27,8 +57,8 @@ export const createTransfer = mutation({
 });
 
 export const getAllTransfers = query({
-  args: {},
-  handler: async (ctx): Promise<Array<{
+  args: { adminWallet: v.string() },
+  handler: async (ctx, args): Promise<Array<{
     _id: string;
     fromAddress: string;
     toAddress: string;
@@ -39,6 +69,7 @@ export const getAllTransfers = query({
     note?: string;
     _creationTime: string;
   }>> => {
+    requireAdmin(args.adminWallet);
     const transfers = await ctx.db
       .query("transfers")
       .order("desc")

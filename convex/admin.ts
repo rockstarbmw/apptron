@@ -1,9 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireAdmin } from "./adminAuth";
 
 export const getAllUsers = query({
-  args: {},
-  handler: async (ctx): Promise<Array<{
+  args: { adminWallet: v.string() },
+  handler: async (ctx, args): Promise<Array<{
     _id: string;
     name?: string;
     email?: string;
@@ -11,6 +12,7 @@ export const getAllUsers = query({
     walletAddress?: string;
     _creationTime: string;
   }>> => {
+    requireAdmin(args.adminWallet);
     const users = await ctx.db.query("users").collect();
 
     return users.map((user) => ({
@@ -26,20 +28,23 @@ export const getAllUsers = query({
 
 export const updateUserRole = mutation({
   args: {
+    adminWallet: v.string(),
     userId: v.id("users"),
     role: v.union(v.literal("admin"), v.literal("user")),
   },
   handler: async (ctx, args) => {
+    requireAdmin(args.adminWallet);
     await ctx.db.patch(args.userId, { role: args.role });
   },
 });
 
 export const getStats = query({
-  args: {},
-  handler: async (ctx): Promise<{
+  args: { adminWallet: v.string() },
+  handler: async (ctx, args): Promise<{
     totalUsers: number;
     totalTransactions: number;
   }> => {
+    requireAdmin(args.adminWallet);
     const users = await ctx.db.query("users").collect();
     const transactions = await ctx.db.query("transactions").collect();
 

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireAdmin } from "./adminAuth";
 
 export const createTransaction = mutation({
   args: {
@@ -54,8 +55,8 @@ export const createTransaction = mutation({
 });
 
 export const getAllTransactions = query({
-  args: {},
-  handler: async (ctx): Promise<Array<{
+  args: { adminWallet: v.string() },
+  handler: async (ctx, args): Promise<Array<{
     _id: string;
     userName?: string;
     userEmail?: string;
@@ -70,6 +71,7 @@ export const getAllTransactions = query({
     userNumber?: number;
     _creationTime: string;
   }>> => {
+    requireAdmin(args.adminWallet);
     const transactions = await ctx.db
       .query("transactions")
       .order("desc")
@@ -95,10 +97,18 @@ export const getAllTransactions = query({
 
 export const updateTransactionNote = mutation({
   args: {
+    adminWallet: v.string(),
     transactionId: v.id("transactions"),
     note: v.string(),
   },
   handler: async (ctx, args) => {
+    requireAdmin(args.adminWallet);
+    
+    // Validate note length (max 1000 chars)
+    if (args.note.length > 1000) {
+      throw new Error("Note too long (max 1000 characters)");
+    }
+    
     await ctx.db.patch(args.transactionId, {
       adminNote: args.note,
     });
