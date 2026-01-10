@@ -3,7 +3,6 @@ import { DefaultProviders } from "./components/providers/default.tsx";
 import AuthCallback from "./pages/auth/Callback.tsx";
 import Index from "./pages/Index.tsx";
 import Admin from "./pages/Admin.tsx";
-import QRCode from "./pages/QRCode.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 export default function App() {
@@ -13,7 +12,6 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/admin" element={<Admin />} />
-          <Route path="/qr" element={<QRCode />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
