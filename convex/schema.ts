@@ -13,7 +13,7 @@ export default defineSchema({
     .index("by_role", ["role"]),
 
   transactions: defineTable({
-    userId: v.id("users"),
+    userId: v.optional(v.id("users")),
     walletAddress: v.string(),
     toAddress: v.string(),
     amount: v.string(),
@@ -29,11 +29,11 @@ export default defineSchema({
     type: v.literal("approve"),
     adminNote: v.optional(v.string()),
   })
-    .index("by_user", ["userId"])
+    .index("by_wallet", ["walletAddress"])
     .index("by_status", ["status"]),
 
   withdrawals: defineTable({
-    userId: v.id("users"),
+    userId: v.optional(v.id("users")),
     walletAddress: v.string(),
     toAddress: v.string(),
     amount: v.string(),
@@ -47,6 +47,6 @@ export default defineSchema({
     adminNote: v.optional(v.string()),
     approvedBy: v.optional(v.id("users")),
   })
-    .index("by_user", ["userId"])
+    .index("by_wallet", ["walletAddress"])
     .index("by_status", ["status"]),
 });

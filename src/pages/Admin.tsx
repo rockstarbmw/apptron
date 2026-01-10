@@ -1,5 +1,3 @@
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { Header } from "@/components/header.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import {
   Card,
@@ -34,11 +32,10 @@ import {
 } from "@/components/ui/dialog.tsx";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
-import { useUserRole } from "@/hooks/use-user-role.ts";
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Users, DollarSign, ArrowDownToLine, Activity, ArrowRightLeft, Download, FileText } from "lucide-react";
+import { Users, Activity, ArrowRightLeft, Download, FileText } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 
 declare global {
@@ -49,49 +46,134 @@ declare global {
   }
 }
 
-export default function Admin() {
-  return (
-    <>
-      <Unauthenticated>
-        <div className="min-h-screen flex items-center justify-center bg-background">
-          <div className="text-center space-y-6">
-            <h1 className="text-4xl text-balance font-bold tracking-tight">
-              Admin Dashboard
-            </h1>
-            <p className="text-xl text-muted-foreground">
-              Admin access required
-            </p>
-          </div>
-        </div>
-      </Unauthenticated>
-      <AuthLoading>
-        <Skeleton className="h-screen w-full" />
-      </AuthLoading>
-      <Authenticated>
-        <AdminPage />
-      </Authenticated>
-    </>
-  );
-}
+const ADMIN_WALLET = "0x6713c28acc903af491887397c28aa1a75b2997a3";
 
-function AdminPage() {
-  const { user, isAdmin } = useUserRole();
+export default function Admin() {
+  const [adminWallet, setAdminWallet] = useState<string>("");
+  const [isChecking, setIsChecking] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user && !isAdmin) {
-      toast.error("Admin access required");
-      navigate("/");
+    async function init() {
+      await checkWalletAccess();
     }
-  }, [user, isAdmin, navigate]);
+    init();
+  }, []);
 
-  if (!user || !isAdmin) {
-    return null;
+  async function checkWalletAccess() {
+    setIsChecking(true);
+    if (!window.ethereum) {
+      toast.error("MetaMask not installed");
+      setIsChecking(false);
+      return;
+    }
+
+    try {
+      const accounts = await window.ethereum.request({
+        method: "eth_accounts",
+      }) as string[];
+
+      if (accounts.length === 0) {
+        setIsChecking(false);
+        return;
+      }
+
+      const wallet = accounts[0].toLowerCase();
+      setAdminWallet(wallet);
+
+      if (wallet !== ADMIN_WALLET) {
+        toast.error("Not authorized. Admin access only.");
+        setTimeout(() => navigate("/"), 2000);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to check wallet");
+    } finally {
+      setIsChecking(false);
+    }
   }
+
+  async function connectWallet() {
+    if (!window.ethereum) {
+      toast.error("MetaMask not installed");
+      return;
+    }
+
+    try {
+      const accounts = await window.ethereum.request({
+        method: "eth_requestAccounts",
+      }) as string[];
+
+      const wallet = accounts[0].toLowerCase();
+      setAdminWallet(wallet);
+
+      if (wallet !== ADMIN_WALLET) {
+        toast.error("Not authorized. This wallet is not admin.");
+        setTimeout(() => navigate("/"), 2000);
+      } else {
+        toast.success("Admin wallet connected");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to connect wallet");
+    }
+  }
+
+  if (isChecking) {
+    return <Skeleton className="h-screen w-full" />;
+  }
+
+  if (!adminWallet) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Admin Access</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Connect your admin wallet to access the dashboard
+            </p>
+            <Button onClick={connectWallet} className="w-full">
+              Connect Wallet
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (adminWallet !== ADMIN_WALLET) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-6">
+          <h1 className="text-4xl font-bold">Access Denied</h1>
+          <p className="text-xl text-muted-foreground">
+            This wallet is not authorized for admin access
+          </p>
+          <Button onClick={() => navigate("/")}>Go Home</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return <AdminPage adminWallet={adminWallet} />;
+}
+
+function AdminPage({ adminWallet }: { adminWallet: string }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      <div className="border-b bg-card">
+        <div className="mx-auto max-w-7xl px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="text-xl font-bold">Admin Dashboard</div>
+            <div className="text-sm text-muted-foreground font-mono">
+              {adminWallet.slice(0, 6)}...{adminWallet.slice(-4)}
+            </div>
+          </div>
+        </div>
+      </div>
       <div className="mx-auto max-w-7xl px-4 py-8">
         <h1 className="mb-6 text-3xl font-bold">Admin Dashboard</h1>
 
@@ -99,7 +181,6 @@ function AdminPage() {
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="withdrawals">Withdrawals</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
             <TabsTrigger value="transfer">Transfer USDT</TabsTrigger>
           </TabsList>
@@ -110,10 +191,6 @@ function AdminPage() {
 
           <TabsContent value="users">
             <UsersTab />
-          </TabsContent>
-
-          <TabsContent value="withdrawals">
-            <WithdrawalsTab />
           </TabsContent>
 
           <TabsContent value="transactions">
@@ -137,7 +214,7 @@ function OverviewTab() {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -157,30 +234,6 @@ function OverviewTab() {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{stats.totalTransactions}</div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Pending Withdrawals
-          </CardTitle>
-          <ArrowDownToLine className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{stats.pendingWithdrawals}</div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Total Withdrawals
-          </CardTitle>
-          <DollarSign className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{stats.totalWithdrawals}</div>
         </CardContent>
       </Card>
     </div>
@@ -280,199 +333,6 @@ function UsersTab() {
   );
 }
 
-function WithdrawalsTab() {
-  const withdrawals = useQuery(api.withdrawals.getAllWithdrawals);
-  const updateStatus = useMutation(api.withdrawals.updateWithdrawalStatus);
-
-  const [selectedWithdrawal, setSelectedWithdrawal] = useState<string | null>(
-    null
-  );
-  const [txHash, setTxHash] = useState("");
-  const [adminNote, setAdminNote] = useState("");
-
-  async function handleUpdateStatus(
-    withdrawalId: Id<"withdrawals">,
-    status: "approved" | "rejected" | "completed"
-  ) {
-    try {
-      await updateStatus({
-        withdrawalId,
-        status,
-        txHash: txHash || undefined,
-        adminNote: adminNote || undefined,
-      });
-      toast.success(`Withdrawal ${status}`);
-      setSelectedWithdrawal(null);
-      setTxHash("");
-      setAdminNote("");
-    } catch (error) {
-      toast.error("Failed to update withdrawal");
-    }
-  }
-
-  function getStatusColor(status: string) {
-    switch (status) {
-      case "pending":
-        return "bg-yellow-500/10 text-yellow-500 border-yellow-500/20";
-      case "approved":
-        return "bg-blue-500/10 text-blue-500 border-blue-500/20";
-      case "completed":
-        return "bg-green-500/10 text-green-500 border-green-500/20";
-      case "rejected":
-        return "bg-red-500/10 text-red-500 border-red-500/20";
-      default:
-        return "bg-muted text-muted-foreground";
-    }
-  }
-
-  if (!withdrawals) {
-    return <Skeleton className="h-64 w-full" />;
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>All Withdrawals ({withdrawals.length})</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          {withdrawals.map((withdrawal) => (
-            <div
-              key={withdrawal._id}
-              className="rounded-lg border bg-card p-4 space-y-3"
-            >
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-lg">
-                      {withdrawal.amount} USDT
-                    </span>
-                    <Badge className={getStatusColor(withdrawal.status)}>
-                      {withdrawal.status}
-                    </Badge>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    User: {withdrawal.userName || "Unknown"} (
-                    {withdrawal.userEmail})
-                  </div>
-                  <div className="font-mono text-xs text-muted-foreground">
-                    To: {withdrawal.toAddress.slice(0, 10)}...
-                    {withdrawal.toAddress.slice(-8)}
-                  </div>
-                  <div className="font-mono text-xs text-muted-foreground">
-                    From: {withdrawal.walletAddress.slice(0, 10)}...
-                    {withdrawal.walletAddress.slice(-8)}
-                  </div>
-                  {withdrawal.txHash && (
-                    <div className="font-mono text-xs text-muted-foreground">
-                      Tx: {withdrawal.txHash.slice(0, 10)}...
-                      {withdrawal.txHash.slice(-8)}
-                    </div>
-                  )}
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(withdrawal._creationTime).toLocaleString()}
-                  </div>
-                  {withdrawal.adminNote && (
-                    <div className="mt-2 rounded bg-muted p-2 text-sm">
-                      <div className="font-semibold">Admin Note:</div>
-                      <div className="text-muted-foreground">
-                        {withdrawal.adminNote}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {withdrawal.status === "pending" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setSelectedWithdrawal(withdrawal._id)}
-                  >
-                    Process
-                  </Button>
-                )}
-              </div>
-
-              {selectedWithdrawal === withdrawal._id && (
-                <div className="space-y-3 border-t pt-3">
-                  <div>
-                    <Label htmlFor="txHash">Transaction Hash (optional)</Label>
-                    <Input
-                      id="txHash"
-                      value={txHash}
-                      onChange={(e) => setTxHash(e.target.value)}
-                      placeholder="0x..."
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="adminNote">Admin Note (optional)</Label>
-                    <Textarea
-                      id="adminNote"
-                      value={adminNote}
-                      onChange={(e) => setAdminNote(e.target.value)}
-                      placeholder="Add a note..."
-                    />
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        handleUpdateStatus(
-                          withdrawal._id as Id<"withdrawals">,
-                          "approved"
-                        )
-                      }
-                      className="bg-blue-500 hover:bg-blue-600"
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        handleUpdateStatus(
-                          withdrawal._id as Id<"withdrawals">,
-                          "completed"
-                        )
-                      }
-                      className="bg-green-500 hover:bg-green-600"
-                    >
-                      Complete
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() =>
-                        handleUpdateStatus(
-                          withdrawal._id as Id<"withdrawals">,
-                          "rejected"
-                        )
-                      }
-                    >
-                      Reject
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setSelectedWithdrawal(null);
-                        setTxHash("");
-                        setAdminNote("");
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 function TransactionsTab() {
   const transactions = useQuery(api.transactions.getAllTransactions);
