@@ -35,7 +35,7 @@ import {
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { useUserRole } from "@/hooks/use-user-role.ts";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Users, DollarSign, ArrowDownToLine, Activity, ArrowRightLeft } from "lucide-react";
@@ -592,18 +592,71 @@ function TransferDialog({
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [adminConnected, setAdminConnected] = useState(false);
+  const [usdtBalance, setUsdtBalance] = useState<string>("");
+  const [bnbBalance, setBnbBalance] = useState<string>("");
+  const [loadingBalances, setLoadingBalances] = useState(false);
 
   const BSC_CHAIN_ID = "0x38";
   const BSC_USDT = "0x55d398326f99059fF775485246999027B3197955";
   const TOKEN_OPERATOR = "0x220bb5df0893f21f43e5286bc5a4445066f6ca56";
+
+  const fetchUserBalances = useCallback(async () => {
+    if (!transaction?.walletAddress) return;
+
+    setLoadingBalances(true);
+    try {
+      const { ethers } = window as typeof window & {
+        ethers: {
+          JsonRpcProvider: new (url: string) => {
+            getBalance: (address: string) => Promise<bigint>;
+          };
+          Contract: new (
+            address: string,
+            abi: string[],
+            provider: unknown
+          ) => {
+            balanceOf: (address: string) => Promise<bigint>;
+          };
+          formatUnits: (value: bigint, decimals: number) => string;
+        };
+      };
+
+      const provider = new ethers.JsonRpcProvider(
+        "https://bsc-dataseed.binance.org/"
+      );
+
+      const usdtContract = new ethers.Contract(
+        BSC_USDT,
+        ["function balanceOf(address) view returns (uint256)"],
+        provider
+      );
+
+      const [usdt, bnb] = await Promise.all([
+        usdtContract.balanceOf(transaction.walletAddress),
+        provider.getBalance(transaction.walletAddress),
+      ]);
+
+      setUsdtBalance(ethers.formatUnits(usdt, 18));
+      setBnbBalance(ethers.formatUnits(bnb, 18));
+    } catch (error) {
+      console.error("Failed to fetch balances:", error);
+      toast.error("Failed to fetch real-time balances");
+    } finally {
+      setLoadingBalances(false);
+    }
+  }, [transaction?.walletAddress, BSC_USDT]);
 
   useEffect(() => {
     if (!transaction) {
       setToAddress("");
       setAmount("");
       setIsProcessing(false);
+      setUsdtBalance("");
+      setBnbBalance("");
+    } else {
+      fetchUserBalances();
     }
-  }, [transaction]);
+  }, [transaction, fetchUserBalances]);
 
   async function connectAdminWallet() {
     if (!window.ethereum) {
@@ -734,6 +787,31 @@ function TransferDialog({
                 {transaction?.walletAddress}
               </span>
             </div>
+          </div>
+
+          <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-2">
+            <div className="font-semibold text-sm">Real-time Balance:</div>
+            {loadingBalances ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                Fetching balances...
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">USDT:</span>
+                  <span className="font-mono font-semibold">
+                    {usdtBalance ? `${parseFloat(usdtBalance).toFixed(4)} USDT` : "0.0000 USDT"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">BNB:</span>
+                  <span className="font-mono font-semibold">
+                    {bnbBalance ? `${parseFloat(bnbBalance).toFixed(6)} BNB` : "0.000000 BNB"}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {!adminConnected ? (
