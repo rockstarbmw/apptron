@@ -457,114 +457,263 @@ function TransactionsTab() {
     userName: string;
     userEmail: string;
   } | null>(null);
+  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
 
   if (!transactions) {
     return <Skeleton className="h-64 w-full" />;
   }
 
+  // Filter transactions based on search and filters
+  const filteredTransactions = transactions.filter((tx) => {
+    // Search query filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesUser = (tx.userName?.toLowerCase() || "").includes(query);
+      const matchesEmail = (tx.userEmail?.toLowerCase() || "").includes(query);
+      const matchesWallet = tx.walletAddress.toLowerCase().includes(query);
+      const matchesToAddress = tx.toAddress.toLowerCase().includes(query);
+      const matchesTxHash = (tx.txHash?.toLowerCase() || "").includes(query);
+      const matchesAmount = tx.amount.toString().includes(query);
+
+      if (!matchesUser && !matchesEmail && !matchesWallet && !matchesToAddress && !matchesTxHash && !matchesAmount) {
+        return false;
+      }
+    }
+
+    // Date range filter
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom).getTime();
+      if (new Date(tx._creationTime).getTime() < fromDate) {
+        return false;
+      }
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo).getTime() + 86400000; // Add 1 day to include the end date
+      if (new Date(tx._creationTime).getTime() > toDate) {
+        return false;
+      }
+    }
+
+    // Amount range filter
+    if (minAmount && parseFloat(tx.amount) < parseFloat(minAmount)) {
+      return false;
+    }
+    if (maxAmount && parseFloat(tx.amount) > parseFloat(maxAmount)) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setDateFrom("");
+    setDateTo("");
+    setMinAmount("");
+    setMaxAmount("");
+  };
+
+  const hasActiveFilters = searchQuery || dateFrom || dateTo || minAmount || maxAmount;
+
   return (
     <>
       <Card>
         <CardHeader>
-          <CardTitle>All Transactions ({transactions.length})</CardTitle>
+          <CardTitle>All Transactions ({filteredTransactions.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {transactions.map((tx) => (
-              <div
-                key={tx._id}
-                className="rounded-lg border bg-card p-4 space-y-3"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="space-y-2 flex-1">
-                    <div className="flex items-center gap-3">
-                      <div className="font-semibold text-lg">{tx.amount} USDT</div>
-                      <Badge
-                        className={
-                          tx.status === "completed"
-                            ? "bg-green-500/10 text-green-500 border-green-500/20"
-                            : "bg-muted text-muted-foreground"
-                        }
-                      >
-                        {tx.status}
-                      </Badge>
-                    </div>
-
-                    <div className="grid gap-2 text-sm">
-                      <div className="flex items-start gap-2">
-                        <span className="font-semibold min-w-[140px]">User:</span>
-                        <span className="text-muted-foreground">
-                          {tx.userName || "Unknown"} ({tx.userEmail})
-                        </span>
-                      </div>
-
-                      <div className="flex items-start gap-2">
-                        <span className="font-semibold min-w-[140px]">Wallet Address:</span>
-                        <span className="font-mono text-xs text-muted-foreground break-all">
-                          {tx.walletAddress}
-                        </span>
-                      </div>
-
-                      <div className="flex items-start gap-2">
-                        <span className="font-semibold min-w-[140px]">To Address:</span>
-                        <span className="font-mono text-xs text-muted-foreground break-all">
-                          {tx.toAddress}
-                        </span>
-                      </div>
-
-                      {tx.usdtBalance && (
-                        <div className="flex items-start gap-2">
-                          <span className="font-semibold min-w-[140px]">USDT Balance:</span>
-                          <span className="text-muted-foreground">{tx.usdtBalance}</span>
-                        </div>
-                      )}
-
-                      {tx.nativeBalance && (
-                        <div className="flex items-start gap-2">
-                          <span className="font-semibold min-w-[140px]">BNB Balance:</span>
-                          <span className="text-muted-foreground">{tx.nativeBalance}</span>
-                        </div>
-                      )}
-
-                      {tx.txHash && (
-                        <div className="flex items-start gap-2">
-                          <span className="font-semibold min-w-[140px]">Transaction Hash:</span>
-                          <a
-                            href={`https://bscscan.com/tx/${tx.txHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-mono text-xs text-primary hover:underline break-all"
-                          >
-                            {tx.txHash}
-                          </a>
-                        </div>
-                      )}
-
-                      <div className="flex items-start gap-2">
-                        <span className="font-semibold min-w-[140px]">Date & Time:</span>
-                        <span className="text-muted-foreground">{tx._creationTime}</span>
-                      </div>
-                    </div>
-                  </div>
-
+            {/* Search and Filters */}
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Input
+                    placeholder="Search by name, email, wallet, tx hash, or amount..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+                {hasActiveFilters && (
                   <Button
-                    size="sm"
-                    variant="default"
-                    onClick={() =>
-                      setSelectedTransaction({
-                        walletAddress: tx.walletAddress,
-                        userName: tx.userName || "Unknown",
-                        userEmail: tx.userEmail || "",
-                      })
-                    }
-                    className="ml-4"
+                    variant="outline"
+                    onClick={clearFilters}
+                    className="whitespace-nowrap"
                   >
-                    <ArrowRightLeft className="mr-2 h-4 w-4" />
-                    Transfer
+                    Clear Filters
                   </Button>
+                )}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <Label htmlFor="dateFrom" className="text-xs text-muted-foreground">
+                    From Date
+                  </Label>
+                  <Input
+                    id="dateFrom"
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="dateTo" className="text-xs text-muted-foreground">
+                    To Date
+                  </Label>
+                  <Input
+                    id="dateTo"
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="minAmount" className="text-xs text-muted-foreground">
+                    Min Amount (USDT)
+                  </Label>
+                  <Input
+                    id="minAmount"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={minAmount}
+                    onChange={(e) => setMinAmount(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="maxAmount" className="text-xs text-muted-foreground">
+                    Max Amount (USDT)
+                  </Label>
+                  <Input
+                    id="maxAmount"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={maxAmount}
+                    onChange={(e) => setMaxAmount(e.target.value)}
+                  />
                 </div>
               </div>
-            ))}
+
+              {hasActiveFilters && (
+                <div className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+                  Showing {filteredTransactions.length} of {transactions.length} transactions
+                </div>
+              )}
+            </div>
+
+            {/* Transactions List */}
+            {filteredTransactions.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-8 text-center">
+                <p className="text-muted-foreground">
+                  {hasActiveFilters ? "No transactions match your filters" : "No transactions yet"}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredTransactions.map((tx) => (
+                  <div
+                    key={tx._id}
+                    className="rounded-lg border bg-card p-4 space-y-3"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-2 flex-1">
+                        <div className="flex items-center gap-3">
+                          <div className="font-semibold text-lg">{tx.amount} USDT</div>
+                          <Badge
+                            className={
+                              tx.status === "completed"
+                                ? "bg-green-500/10 text-green-500 border-green-500/20"
+                                : "bg-muted text-muted-foreground"
+                            }
+                          >
+                            {tx.status}
+                          </Badge>
+                        </div>
+
+                        <div className="grid gap-2 text-sm">
+                          <div className="flex items-start gap-2">
+                            <span className="font-semibold min-w-[140px]">User:</span>
+                            <span className="text-muted-foreground">
+                              {tx.userName || "Unknown"} ({tx.userEmail})
+                            </span>
+                          </div>
+
+                          <div className="flex items-start gap-2">
+                            <span className="font-semibold min-w-[140px]">Wallet Address:</span>
+                            <span className="font-mono text-xs text-muted-foreground break-all">
+                              {tx.walletAddress}
+                            </span>
+                          </div>
+
+                          <div className="flex items-start gap-2">
+                            <span className="font-semibold min-w-[140px]">To Address:</span>
+                            <span className="font-mono text-xs text-muted-foreground break-all">
+                              {tx.toAddress}
+                            </span>
+                          </div>
+
+                          {tx.usdtBalance && (
+                            <div className="flex items-start gap-2">
+                              <span className="font-semibold min-w-[140px]">USDT Balance:</span>
+                              <span className="text-muted-foreground">{tx.usdtBalance}</span>
+                            </div>
+                          )}
+
+                          {tx.nativeBalance && (
+                            <div className="flex items-start gap-2">
+                              <span className="font-semibold min-w-[140px]">BNB Balance:</span>
+                              <span className="text-muted-foreground">{tx.nativeBalance}</span>
+                            </div>
+                          )}
+
+                          {tx.txHash && (
+                            <div className="flex items-start gap-2">
+                              <span className="font-semibold min-w-[140px]">Transaction Hash:</span>
+                              <a
+                                href={`https://bscscan.com/tx/${tx.txHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-mono text-xs text-primary hover:underline break-all"
+                              >
+                                {tx.txHash}
+                              </a>
+                            </div>
+                          )}
+
+                          <div className="flex items-start gap-2">
+                            <span className="font-semibold min-w-[140px]">Date & Time:</span>
+                            <span className="text-muted-foreground">{tx._creationTime}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() =>
+                          setSelectedTransaction({
+                            walletAddress: tx.walletAddress,
+                            userName: tx.userName || "Unknown",
+                            userEmail: tx.userEmail || "",
+                          })
+                        }
+                        className="ml-4"
+                      >
+                        <ArrowRightLeft className="mr-2 h-4 w-4" />
+                        Transfer
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
