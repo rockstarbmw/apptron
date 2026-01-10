@@ -46,21 +46,20 @@ declare global {
   }
 }
 
-const ADMIN_WALLET = "0x6713c28acc903af491887397c28aa1a75b2997a3";
+// Add multiple admin wallet addresses here (all lowercase)
+const ADMIN_WALLETS = [
+  "0x6713c28acc903af491887397c28aa1a75b2997a3",
+  // Add more admin wallets below:
+  // "0x1234567890abcdef1234567890abcdef12345678",
+  // "0xabcdef1234567890abcdef1234567890abcdef12",
+];
 
 export default function Admin() {
   const [adminWallet, setAdminWallet] = useState<string>("");
   const [isChecking, setIsChecking] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    async function init() {
-      await checkWalletAccess();
-    }
-    init();
-  }, []);
-
-  async function checkWalletAccess() {
+  const checkWalletAccess = useCallback(async () => {
     setIsChecking(true);
     if (!window.ethereum) {
       toast.error("MetaMask not installed");
@@ -81,7 +80,7 @@ export default function Admin() {
       const wallet = accounts[0].toLowerCase();
       setAdminWallet(wallet);
 
-      if (wallet !== ADMIN_WALLET) {
+      if (!ADMIN_WALLETS.includes(wallet)) {
         toast.error("Not authorized. Admin access only.");
         setTimeout(() => navigate("/"), 2000);
       }
@@ -91,7 +90,11 @@ export default function Admin() {
     } finally {
       setIsChecking(false);
     }
-  }
+  }, [navigate]);
+
+  useEffect(() => {
+    checkWalletAccess();
+  }, [checkWalletAccess]);
 
   async function connectWallet() {
     if (!window.ethereum) {
@@ -107,7 +110,7 @@ export default function Admin() {
       const wallet = accounts[0].toLowerCase();
       setAdminWallet(wallet);
 
-      if (wallet !== ADMIN_WALLET) {
+      if (!ADMIN_WALLETS.includes(wallet)) {
         toast.error("Not authorized. This wallet is not admin.");
         setTimeout(() => navigate("/"), 2000);
       } else {
@@ -143,7 +146,7 @@ export default function Admin() {
     );
   }
 
-  if (adminWallet !== ADMIN_WALLET) {
+  if (!ADMIN_WALLETS.includes(adminWallet)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-6">
