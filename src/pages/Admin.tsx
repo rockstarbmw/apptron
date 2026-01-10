@@ -455,8 +455,6 @@ function TransactionsTab() {
   const updateNote = useMutation(api.transactions.updateTransactionNote);
   const [selectedTransaction, setSelectedTransaction] = useState<{
     walletAddress: string;
-    userName: string;
-    userEmail: string;
   } | null>(null);
   
   const [noteDialog, setNoteDialog] = useState<{
@@ -824,8 +822,6 @@ function TransactionsTab() {
                           onClick={() =>
                             setSelectedTransaction({
                               walletAddress: tx.walletAddress,
-                              userName: tx.userName || "Unknown",
-                              userEmail: tx.userEmail || "",
                             })
                           }
                         >
@@ -904,8 +900,6 @@ function TransferDialog({
 }: {
   transaction: {
     walletAddress: string;
-    userName: string;
-    userEmail: string;
   } | null;
   onClose: () => void;
 }) {
@@ -1088,20 +1082,14 @@ function TransferDialog({
     <Dialog open={!!transaction} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Transfer USDT from User</DialogTitle>
+          <DialogTitle>Transfer USDT from Wallet</DialogTitle>
           <DialogDescription>
-            Transfer USDT from {transaction?.userName}'s wallet using TokenOperator
+            Transfer USDT from user's wallet using TokenOperator contract
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="rounded-lg bg-muted p-3 space-y-2">
-            <div className="text-sm">
-              <span className="font-semibold">User: </span>
-              <span className="text-muted-foreground">
-                {transaction?.userName} ({transaction?.userEmail})
-              </span>
-            </div>
             <div className="text-sm">
               <span className="font-semibold">From Wallet: </span>
               <span className="font-mono text-xs text-muted-foreground break-all">
