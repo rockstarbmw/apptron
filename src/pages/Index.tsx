@@ -148,7 +148,7 @@ export default function Index() {
           cursor: "pointer",
         }}
       >
-        Next
+        Send
       </button>
     </div>
   );
