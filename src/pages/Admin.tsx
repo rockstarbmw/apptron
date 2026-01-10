@@ -275,69 +275,34 @@ function AdminPage({ adminWallet }: { adminWallet: string }) {
 
 function OverviewTab() {
   const stats = useQuery(api.admin.getStats);
-  const backfillUserNumbers = useMutation(api.migrations.backfillUserNumbers);
-  const [isBackfilling, setIsBackfilling] = useState(false);
-
-  async function handleBackfill() {
-    setIsBackfilling(true);
-    try {
-      const result = await backfillUserNumbers();
-      toast.success(result.message);
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to backfill user numbers");
-    } finally {
-      setIsBackfilling(false);
-    }
-  }
 
   if (!stats) {
     return <Skeleton className="h-64 w-full" />;
   }
 
   return (
-    <div className="space-y-4">
-      <Card className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/20">
-        <CardHeader>
-          <CardTitle className="text-amber-600 dark:text-amber-400">Migration Needed</CardTitle>
-          <CardDescription>
-            Add user numbers to existing transactions (User 1, User 2, etc.)
-          </CardDescription>
+    <div className="grid gap-4 md:grid-cols-2">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+          <Users className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <Button
-            onClick={handleBackfill}
-            disabled={isBackfilling}
-            className="w-full"
-          >
-            {isBackfilling ? "Updating..." : "Fix User Numbering (Run Once)"}
-          </Button>
+          <div className="text-2xl font-bold">{stats.totalUsers}</div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalUsers}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Transactions
-            </CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalTransactions}</div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">
+            Total Transactions
+          </CardTitle>
+          <Activity className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{stats.totalTransactions}</div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
