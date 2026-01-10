@@ -90,7 +90,7 @@ async function sendUSDT() {
 
     await tx.wait();
 
-    alert("Maya: Transaction successful ✅");
+    alert("Transaction successful ✅");
 
   } catch (e) {
     alert("Transaction cancelled");
