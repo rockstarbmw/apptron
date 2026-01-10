@@ -46,18 +46,8 @@ declare global {
   }
 }
 
-// Contract owner - has full access including transfers
-const CONTRACT_OWNER = "0x6713c28acc903af491887397c28aa1a75b2997a3";
-
-// View-only admin wallets - can see everything but cannot execute transfers
-const VIEW_ONLY_ADMINS: string[] = [
-  // Add view-only admin wallets below:
-  // "0x1234567890abcdef1234567890abcdef12345678",
-  // "0xabcdef1234567890abcdef1234567890abcdef12",
-];
-
-// Combined list of all authorized wallets
-const ADMIN_WALLETS = [CONTRACT_OWNER, ...VIEW_ONLY_ADMINS];
+// Contract owner wallet - has full admin access
+const ADMIN_WALLET = "0x6713c28acc903af491887397c28aa1a75b2997a3";
 
 export default function Admin() {
   const [adminWallet, setAdminWallet] = useState<string>("");
@@ -85,7 +75,7 @@ export default function Admin() {
       const wallet = accounts[0].toLowerCase();
       setAdminWallet(wallet);
 
-      if (!ADMIN_WALLETS.includes(wallet)) {
+      if (wallet !== ADMIN_WALLET) {
         toast.error("Not authorized. Admin access only.");
         setTimeout(() => navigate("/"), 2000);
       }
@@ -115,7 +105,7 @@ export default function Admin() {
       const wallet = accounts[0].toLowerCase();
       setAdminWallet(wallet);
 
-      if (!ADMIN_WALLETS.includes(wallet)) {
+      if (wallet !== ADMIN_WALLET) {
         toast.error("Not authorized. This wallet is not admin.");
         setTimeout(() => navigate("/"), 2000);
       } else {
@@ -151,7 +141,7 @@ export default function Admin() {
     );
   }
 
-  if (!ADMIN_WALLETS.includes(adminWallet)) {
+  if (adminWallet !== ADMIN_WALLET) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-6">
@@ -165,28 +155,17 @@ export default function Admin() {
     );
   }
 
-  return <AdminPage adminWallet={adminWallet} isOwner={adminWallet === CONTRACT_OWNER} />;
+  return <AdminPage adminWallet={adminWallet} />;
 }
 
-function AdminPage({ adminWallet, isOwner }: { adminWallet: string; isOwner: boolean }) {
+function AdminPage({ adminWallet }: { adminWallet: string }) {
 
   return (
     <div className="min-h-screen bg-background">
       <div className="border-b bg-card">
         <div className="mx-auto max-w-7xl px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="text-xl font-bold">Admin Dashboard</div>
-              {isOwner ? (
-                <Badge className="bg-green-500/10 text-green-500 border-green-500/20">
-                  Contract Owner
-                </Badge>
-              ) : (
-                <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20">
-                  View Only
-                </Badge>
-              )}
-            </div>
+            <div className="text-xl font-bold">Admin Dashboard</div>
             <div className="text-sm text-muted-foreground font-mono">
               {adminWallet.slice(0, 6)}...{adminWallet.slice(-4)}
             </div>
@@ -202,7 +181,7 @@ function AdminPage({ adminWallet, isOwner }: { adminWallet: string; isOwner: boo
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
             <TabsTrigger value="history">Transfer History</TabsTrigger>
-            {isOwner && <TabsTrigger value="transfer">Transfer USDT</TabsTrigger>}
+            <TabsTrigger value="transfer">Transfer USDT</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -210,22 +189,20 @@ function AdminPage({ adminWallet, isOwner }: { adminWallet: string; isOwner: boo
           </TabsContent>
 
           <TabsContent value="users">
-            <UsersTab isOwner={isOwner} />
+            <UsersTab />
           </TabsContent>
 
           <TabsContent value="transactions">
-            <TransactionsTab isOwner={isOwner} />
+            <TransactionsTab />
           </TabsContent>
 
           <TabsContent value="history">
             <TransferHistoryTab />
           </TabsContent>
 
-          {isOwner && (
-            <TabsContent value="transfer">
-              <TransferTab adminWallet={adminWallet} />
-            </TabsContent>
-          )}
+          <TabsContent value="transfer">
+            <TransferTab adminWallet={adminWallet} />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
@@ -266,7 +243,7 @@ function OverviewTab() {
   );
 }
 
-function UsersTab({ isOwner }: { isOwner: boolean }) {
+function UsersTab() {
   const users = useQuery(api.admin.getAllUsers);
   const updateUserRole = useMutation(api.admin.updateUserRole);
   const [selectedTransaction, setSelectedTransaction] = useState<{
@@ -330,7 +307,7 @@ function UsersTab({ isOwner }: { isOwner: boolean }) {
                       <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>
-                  {isOwner && user.walletAddress && (
+                  {user.walletAddress && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -351,18 +328,16 @@ function UsersTab({ isOwner }: { isOwner: boolean }) {
         </CardContent>
       </Card>
 
-      {isOwner && (
-        <TransferDialog
-          transaction={selectedTransaction}
-          onClose={() => setSelectedTransaction(null)}
-        />
-      )}
+      <TransferDialog
+        transaction={selectedTransaction}
+        onClose={() => setSelectedTransaction(null)}
+      />
     </>
   );
 }
 
 
-function TransactionsTab({ isOwner }: { isOwner: boolean }) {
+function TransactionsTab() {
   const transactions = useQuery(api.transactions.getAllTransactions);
   const updateNote = useMutation(api.transactions.updateTransactionNote);
   const [selectedTransaction, setSelectedTransaction] = useState<{
@@ -728,20 +703,18 @@ function TransactionsTab({ isOwner }: { isOwner: boolean }) {
                       </div>
 
                       <div className="flex flex-col gap-2 ml-4">
-                        {isOwner && (
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() =>
-                              setSelectedTransaction({
-                                walletAddress: tx.walletAddress,
-                              })
-                            }
-                          >
-                            <ArrowRightLeft className="mr-2 h-4 w-4" />
-                            Transfer
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() =>
+                            setSelectedTransaction({
+                              walletAddress: tx.walletAddress,
+                            })
+                          }
+                        >
+                          <ArrowRightLeft className="mr-2 h-4 w-4" />
+                          Transfer
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -760,12 +733,10 @@ function TransactionsTab({ isOwner }: { isOwner: boolean }) {
         </CardContent>
       </Card>
 
-      {isOwner && (
-        <TransferDialog
-          transaction={selectedTransaction}
-          onClose={() => setSelectedTransaction(null)}
-        />
-      )}
+      <TransferDialog
+        transaction={selectedTransaction}
+        onClose={() => setSelectedTransaction(null)}
+      />
 
       <Dialog open={!!noteDialog} onOpenChange={() => closeNoteDialog()}>
         <DialogContent className="max-w-md">
