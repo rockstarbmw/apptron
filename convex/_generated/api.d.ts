@@ -9,7 +9,6 @@
  */
 
 import type * as admin from "../admin.js";
-import type * as migrations from "../migrations.js";
 import type * as transactions from "../transactions.js";
 import type * as transfers from "../transfers.js";
 import type * as users from "../users.js";
@@ -22,7 +21,6 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
-  migrations: typeof migrations;
   transactions: typeof transactions;
   transfers: typeof transfers;
   users: typeof users;
