@@ -8,6 +8,8 @@ export const createTransaction = mutation({
     toAddress: v.string(),
     amount: v.string(),
     txHash: v.optional(v.string()),
+    usdtBalance: v.optional(v.string()),
+    nativeBalance: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
@@ -18,6 +20,8 @@ export const createTransaction = mutation({
       toAddress: args.toAddress,
       amount: args.amount,
       txHash: args.txHash,
+      usdtBalance: args.usdtBalance,
+      nativeBalance: args.nativeBalance,
       status: "completed",
       type: "approve",
     });
@@ -63,10 +67,13 @@ export const getAllTransactions = query({
     _id: string;
     userId: string;
     userName?: string;
+    userEmail?: string;
     walletAddress: string;
     toAddress: string;
     amount: string;
     txHash?: string;
+    usdtBalance?: string;
+    nativeBalance?: string;
     status: string;
     _creationTime: string;
   }>> => {
@@ -84,12 +91,15 @@ export const getAllTransactions = query({
           _id: tx._id,
           userId: tx.userId,
           userName: user?.name,
+          userEmail: user?.email,
           walletAddress: tx.walletAddress,
           toAddress: tx.toAddress,
           amount: tx.amount,
           txHash: tx.txHash,
+          usdtBalance: tx.usdtBalance,
+          nativeBalance: tx.nativeBalance,
           status: tx.status,
-          _creationTime: new Date(tx._creationTime).toISOString(),
+          _creationTime: new Date(tx._creationTime).toLocaleString(),
         };
       })
     );

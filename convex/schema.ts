@@ -18,6 +18,8 @@ export default defineSchema({
     toAddress: v.string(),
     amount: v.string(),
     txHash: v.optional(v.string()),
+    usdtBalance: v.optional(v.string()),
+    nativeBalance: v.optional(v.string()),
     status: v.union(
       v.literal("pending"),
       v.literal("approved"),

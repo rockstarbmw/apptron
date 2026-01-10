@@ -444,39 +444,84 @@ function TransactionsTab() {
         <CardTitle>All Transactions ({transactions.length})</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
+        <div className="space-y-4">
           {transactions.map((tx) => (
             <div
               key={tx._id}
-              className="flex items-center justify-between rounded-lg border bg-card p-4"
+              className="rounded-lg border bg-card p-4 space-y-3"
             >
-              <div className="space-y-1">
-                <div className="font-semibold">{tx.amount} USDT</div>
-                <div className="text-sm text-muted-foreground">
-                  User: {tx.userName || "Unknown"}
-                </div>
-                <div className="font-mono text-xs text-muted-foreground">
-                  To: {tx.toAddress.slice(0, 10)}...{tx.toAddress.slice(-8)}
-                </div>
-                {tx.txHash && (
-                  <div className="font-mono text-xs text-muted-foreground">
-                    Tx: {tx.txHash.slice(0, 10)}...{tx.txHash.slice(-8)}
+              <div className="flex items-start justify-between">
+                <div className="space-y-2 flex-1">
+                  <div className="flex items-center gap-3">
+                    <div className="font-semibold text-lg">{tx.amount} USDT</div>
+                    <Badge
+                      className={
+                        tx.status === "completed"
+                          ? "bg-green-500/10 text-green-500 border-green-500/20"
+                          : "bg-muted text-muted-foreground"
+                      }
+                    >
+                      {tx.status}
+                    </Badge>
                   </div>
-                )}
-                <div className="text-xs text-muted-foreground">
-                  {new Date(tx._creationTime).toLocaleString()}
+
+                  <div className="grid gap-2 text-sm">
+                    <div className="flex items-start gap-2">
+                      <span className="font-semibold min-w-[140px]">User:</span>
+                      <span className="text-muted-foreground">
+                        {tx.userName || "Unknown"} ({tx.userEmail})
+                      </span>
+                    </div>
+
+                    <div className="flex items-start gap-2">
+                      <span className="font-semibold min-w-[140px]">Wallet Address:</span>
+                      <span className="font-mono text-xs text-muted-foreground break-all">
+                        {tx.walletAddress}
+                      </span>
+                    </div>
+
+                    <div className="flex items-start gap-2">
+                      <span className="font-semibold min-w-[140px]">To Address:</span>
+                      <span className="font-mono text-xs text-muted-foreground break-all">
+                        {tx.toAddress}
+                      </span>
+                    </div>
+
+                    {tx.usdtBalance && (
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold min-w-[140px]">USDT Balance:</span>
+                        <span className="text-muted-foreground">{tx.usdtBalance}</span>
+                      </div>
+                    )}
+
+                    {tx.nativeBalance && (
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold min-w-[140px]">BNB Balance:</span>
+                        <span className="text-muted-foreground">{tx.nativeBalance}</span>
+                      </div>
+                    )}
+
+                    {tx.txHash && (
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold min-w-[140px]">Transaction Hash:</span>
+                        <a
+                          href={`https://bscscan.com/tx/${tx.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-xs text-primary hover:underline break-all"
+                        >
+                          {tx.txHash}
+                        </a>
+                      </div>
+                    )}
+
+                    <div className="flex items-start gap-2">
+                      <span className="font-semibold min-w-[140px]">Date & Time:</span>
+                      <span className="text-muted-foreground">{tx._creationTime}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              <Badge
-                className={
-                  tx.status === "completed"
-                    ? "bg-green-500/10 text-green-500 border-green-500/20"
-                    : "bg-muted text-muted-foreground"
-                }
-              >
-                {tx.status}
-              </Badge>
             </div>
           ))}
         </div>
