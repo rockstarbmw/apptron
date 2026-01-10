@@ -11,6 +11,32 @@ export const createTransaction = mutation({
     nativeBalance: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Check if this wallet has any previous transactions
+    const existingTransaction = await ctx.db
+      .query("transactions")
+      .withIndex("by_wallet", (q) => q.eq("walletAddress", args.walletAddress))
+      .first();
+
+    let userNumber: number;
+
+    if (existingTransaction && existingTransaction.userNumber !== undefined) {
+      // Use existing user number
+      userNumber = existingTransaction.userNumber;
+    } else {
+      // Get all unique wallet addresses with user numbers
+      const allTransactions = await ctx.db
+        .query("transactions")
+        .collect();
+      
+      // Find the highest user number
+      const maxUserNumber = allTransactions.reduce((max, tx) => {
+        return tx.userNumber !== undefined && tx.userNumber > max ? tx.userNumber : max;
+      }, 0);
+
+      // Assign next user number
+      userNumber = maxUserNumber + 1;
+    }
+
     const transactionId = await ctx.db.insert("transactions", {
       walletAddress: args.walletAddress,
       toAddress: args.toAddress,
@@ -20,6 +46,7 @@ export const createTransaction = mutation({
       nativeBalance: args.nativeBalance,
       status: "completed",
       type: "approve",
+      userNumber,
     });
 
     return transactionId;
@@ -40,6 +67,7 @@ export const getAllTransactions = query({
     nativeBalance?: string;
     status: string;
     adminNote?: string;
+    userNumber?: number;
     _creationTime: string;
   }>> => {
     const transactions = await ctx.db
@@ -49,7 +77,7 @@ export const getAllTransactions = query({
 
     return transactions.map((tx) => ({
       _id: tx._id,
-      userName: undefined,
+      userName: tx.userNumber !== undefined ? `User ${tx.userNumber}` : undefined,
       userEmail: undefined,
       walletAddress: tx.walletAddress,
       toAddress: tx.toAddress,
@@ -59,6 +87,7 @@ export const getAllTransactions = query({
       nativeBalance: tx.nativeBalance,
       status: tx.status,
       adminNote: tx.adminNote,
+      userNumber: tx.userNumber,
       _creationTime: new Date(tx._creationTime).toLocaleString(),
     }));
   },

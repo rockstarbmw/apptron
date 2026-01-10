@@ -28,6 +28,7 @@ export default defineSchema({
     ),
     type: v.literal("approve"),
     adminNote: v.optional(v.string()),
+    userNumber: v.optional(v.number()),
   })
     .index("by_wallet", ["walletAddress"])
     .index("by_status", ["status"]),
