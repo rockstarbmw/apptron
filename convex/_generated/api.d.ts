@@ -9,11 +9,9 @@
  */
 
 import type * as admin from "../admin.js";
-import type * as helpers from "../helpers.js";
 import type * as transactions from "../transactions.js";
 import type * as transfers from "../transfers.js";
 import type * as users from "../users.js";
-import type * as withdrawals from "../withdrawals.js";
 
 import type {
   ApiFromModules,
@@ -23,11 +21,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
-  helpers: typeof helpers;
   transactions: typeof transactions;
   transfers: typeof transfers;
   users: typeof users;
-  withdrawals: typeof withdrawals;
 }>;
 
 /**

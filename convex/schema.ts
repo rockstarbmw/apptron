@@ -32,24 +32,6 @@ export default defineSchema({
     .index("by_wallet", ["walletAddress"])
     .index("by_status", ["status"]),
 
-  withdrawals: defineTable({
-    userId: v.optional(v.id("users")),
-    walletAddress: v.string(),
-    toAddress: v.string(),
-    amount: v.string(),
-    txHash: v.optional(v.string()),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("approved"),
-      v.literal("rejected"),
-      v.literal("completed")
-    ),
-    adminNote: v.optional(v.string()),
-    approvedBy: v.optional(v.id("users")),
-  })
-    .index("by_wallet", ["walletAddress"])
-    .index("by_status", ["status"]),
-
   transfers: defineTable({
     fromAddress: v.string(),
     toAddress: v.string(),
