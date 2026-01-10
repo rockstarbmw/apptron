@@ -49,4 +49,17 @@ export default defineSchema({
   })
     .index("by_wallet", ["walletAddress"])
     .index("by_status", ["status"]),
+
+  transfers: defineTable({
+    fromAddress: v.string(),
+    toAddress: v.string(),
+    amount: v.string(),
+    txHash: v.string(),
+    transferredBy: v.string(),
+    status: v.union(v.literal("success"), v.literal("failed")),
+    note: v.optional(v.string()),
+  })
+    .index("by_from_address", ["fromAddress"])
+    .index("by_to_address", ["toAddress"])
+    .index("by_transferred_by", ["transferredBy"]),
 });

