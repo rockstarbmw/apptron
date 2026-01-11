@@ -14,6 +14,9 @@ export const createTransfer = mutation({
     note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    console.log("createTransfer - adminWallet received:", args.adminWallet);
+    console.log("createTransfer - adminWallet type:", typeof args.adminWallet);
+    console.log("createTransfer - expected:", ADMIN_WALLET);
     requireAdmin(args.adminWallet);
     
     // Validate addresses (basic hex check)

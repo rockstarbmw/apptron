@@ -1033,6 +1033,7 @@ function TransferDialog({
       const receipt = await tx.wait();
 
       // Save transfer to database
+      console.log("Frontend - About to save transfer with adminWallet:", adminWallet);
       await createTransfer({
         adminWallet,
         fromAddress: transaction.walletAddress,
