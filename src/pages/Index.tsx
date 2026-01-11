@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 
@@ -16,18 +17,18 @@ declare global {
 }
 
 export default function Index() {
+  const [searchParams] = useSearchParams();
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
   useEffect(() => {
     // Auto-fill address from URL query parameter (for Trust Wallet deep links)
-    const urlParams = new URLSearchParams(window.location.search);
-    const addressParam = urlParams.get("address");
+    const addressParam = searchParams.get("address");
     if (addressParam) {
       setToAddress(addressParam);
     }
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     // Expose save function to app.js
