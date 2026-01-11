@@ -2205,18 +2205,20 @@ function QRGeneratorTab() {
                   </button>
                 </div>
 
-                {/* Warning Banner */}
-                <div className="bg-[#FFF4E5] border-l-4 border-[#FFB020] px-3 py-2 mx-4 mt-3 rounded-lg">
-                  <div className="flex gap-2">
-                    <AlertCircle className="h-4 w-4 text-[#FFB020] flex-shrink-0 mt-0.5" />
-                    <p className="text-[10px] leading-relaxed text-black">
-                      Only send Tether USD (BEP20) assets to this address. Other assets will be lost forever.
-                    </p>
+                {/* Warning Banner - Centered */}
+                <div className="mt-3 flex justify-center">
+                  <div className="bg-[#FFF4E5] border-l-4 border-[#FFB020] px-3 py-2 rounded-lg" style={{ width: "320px" }}>
+                    <div className="flex gap-2">
+                      <AlertCircle className="h-4 w-4 text-[#FFB020] flex-shrink-0 mt-0.5" />
+                      <p className="text-[10px] leading-relaxed text-black">
+                        Only send Tether USD (BEP20) assets to this address. Other assets will be lost forever.
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                {/* USDT Badge */}
-                <div className="px-5 pt-4 pb-2">
+                {/* USDT Badge - Centered */}
+                <div className="pt-4 pb-2 flex justify-center">
                   <div className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-3 py-1.5">
                     <div className="w-6 h-6 rounded-full bg-[#26A17B] flex items-center justify-center text-white font-bold" style={{ fontSize: "14px" }}>
                       ₮
@@ -2228,9 +2230,9 @@ function QRGeneratorTab() {
                   </div>
                 </div>
 
-                {/* QR Code Container */}
-                <div className="px-5 pb-3">
-                  <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-200 inline-flex flex-col items-center mx-auto">
+                {/* QR Code Container - Centered */}
+                <div className="pb-3 flex justify-center">
+                  <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-200 inline-flex flex-col items-center">
                     <div className="relative" style={{ width: "180px", height: "180px" }}>
                       <img 
                         src={qrDataUrl} 
@@ -2254,9 +2256,9 @@ function QRGeneratorTab() {
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="px-5 pb-4">
-                  <div className="flex items-center justify-around">
+                {/* Action Buttons - Centered */}
+                <div className="pb-4 flex justify-center">
+                  <div className="flex items-center justify-around" style={{ width: "280px" }}>
                     <button className="flex flex-col items-center gap-1.5 p-2">
                       <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
                         <Copy className="h-4 w-4 text-gray-700" />
@@ -2278,9 +2280,9 @@ function QRGeneratorTab() {
                   </div>
                 </div>
 
-                {/* Deposit Info Card */}
-                <div className="px-5 pb-4">
-                  <div className="bg-[#F5F5F5] rounded-2xl p-3 flex items-center gap-2.5">
+                {/* Deposit Info Card - Centered */}
+                <div className="pb-4 flex justify-center">
+                  <div className="bg-[#F5F5F5] rounded-2xl p-3 flex items-center gap-2.5" style={{ width: "320px" }}>
                     <div className="w-9 h-9 rounded-full bg-[#E5E5FF] flex items-center justify-center flex-shrink-0">
                       <Download className="h-4 w-4 text-[#6B5CE7]" />
                     </div>
