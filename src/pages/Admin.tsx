@@ -56,6 +56,28 @@ import {
 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 
+// Utility function to format timestamps to Indian Standard Time (IST)
+function formatToIST(timestamp: number | string): string {
+  // IST is UTC+5:30
+  const date = new Date(typeof timestamp === 'string' ? parseInt(timestamp) : timestamp);
+  const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+  const istDate = new Date(date.getTime() + istOffset);
+  
+  // Format: "DD MMM YYYY, hh:mm:ss AM/PM IST"
+  const day = String(istDate.getUTCDate()).padStart(2, '0');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[istDate.getUTCMonth()];
+  const year = istDate.getUTCFullYear();
+  
+  let hours = istDate.getUTCHours();
+  const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(istDate.getUTCSeconds()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  
+  return `${day} ${month} ${year}, ${hours}:${minutes}:${seconds} ${ampm} IST`;
+}
+
 declare global {
   interface Window {
     ethereum?: {
@@ -352,7 +374,7 @@ function UsersTab({ adminWallet }: { adminWallet: string }) {
                     </div>
                   )}
                   <div className="text-xs text-muted-foreground">
-                    Joined: {new Date(user._creationTime).toLocaleDateString()}
+                    Joined: {formatToIST(user._creationTime)}
                   </div>
                 </div>
 
@@ -539,7 +561,7 @@ function TransactionsTab({ adminWallet }: { adminWallet: string }) {
 
     // Convert transactions to CSV rows with sanitization
     const rows = filteredTransactions.map((tx) => [
-      sanitizeCSVCell(tx._creationTime),
+      sanitizeCSVCell(formatToIST(tx._creationTime)),
       sanitizeCSVCell(tx.userName || "Unknown"),
       sanitizeCSVCell(tx.userEmail || ""),
       sanitizeCSVCell(tx.walletAddress),
@@ -765,7 +787,7 @@ function TransactionsTab({ adminWallet }: { adminWallet: string }) {
 
                           <div className="flex items-start gap-2">
                             <span className="font-semibold min-w-[140px]">Date & Time:</span>
-                            <span className="text-muted-foreground">{tx._creationTime}</span>
+                            <span className="text-muted-foreground">{formatToIST(tx._creationTime)}</span>
                           </div>
 
                           {tx.adminNote && (
@@ -1246,7 +1268,7 @@ function TransferHistoryTab({ adminWallet }: { adminWallet: string }) {
             <CardHeader className="pb-3">
               <CardDescription>Latest Transfer</CardDescription>
               <CardTitle className="text-lg font-bold">
-                {transfers[0]._creationTime}
+                {formatToIST(transfers[0]._creationTime)}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1328,7 +1350,7 @@ function TransferHistoryTab({ adminWallet }: { adminWallet: string }) {
                         <div className="text-right">
                           <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
                             <Clock className="h-4 w-4" />
-                            {transfer._creationTime}
+                            {formatToIST(transfer._creationTime)}
                           </div>
                         </div>
                       </div>
