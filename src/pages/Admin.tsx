@@ -61,8 +61,17 @@ import {
   ExternalLink,
   Clock,
   CheckCircle2,
-  XCircle
+  XCircle,
+  QrCode,
+  Smartphone,
+  Copy,
+  ArrowLeft,
+  Info,
+  AlertCircle,
+  Shield
 } from "lucide-react";
+import QRCodeCanvas from "qrcode";
+import { toPng } from "html-to-image";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 
 // Utility function to format timestamps to Indian Standard Time (IST)
@@ -241,7 +250,7 @@ function AdminPage({ adminWallet }: { adminWallet: string }) {
       {/* Main Content */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         <Tabs defaultValue="overview" className="space-y-8">
-          <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-card/50 backdrop-blur-sm">
+          <TabsList className="grid w-full grid-cols-6 h-auto p-1 bg-card/50 backdrop-blur-sm">
             <TabsTrigger 
               value="overview" 
               className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -277,6 +286,13 @@ function AdminPage({ adminWallet }: { adminWallet: string }) {
               <Send className="h-4 w-4" />
               <span className="hidden sm:inline">Transfer</span>
             </TabsTrigger>
+            <TabsTrigger 
+              value="qr-generator"
+              className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <QrCode className="h-4 w-4" />
+              <span className="hidden sm:inline">QR Generator</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -297,6 +313,10 @@ function AdminPage({ adminWallet }: { adminWallet: string }) {
 
           <TabsContent value="transfer" className="space-y-6">
             <TransferTab adminWallet={adminWallet} />
+          </TabsContent>
+
+          <TabsContent value="qr-generator" className="space-y-6">
+            <QRGeneratorTab />
           </TabsContent>
         </Tabs>
       </div>
@@ -1925,5 +1945,379 @@ function TransferTab({ adminWallet }: { adminWallet: string }) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function QRGeneratorTab() {
+  const [walletType, setWalletType] = useState<"universal" | "trustwallet" | "metamask">("trustwallet");
+  const [websiteUrl, setWebsiteUrl] = useState("https://bsctest123.onhercules.app");
+  const [walletAddress, setWalletAddress] = useState("");
+  const [generatedUrl, setGeneratedUrl] = useState("");
+  const [qrDataUrl, setQrDataUrl] = useState("");
+
+  async function generateQRCode() {
+    if (!websiteUrl.trim()) {
+      toast.error("Please enter website URL");
+      return;
+    }
+
+    try {
+      // Build the final URL based on wallet type
+      let finalUrl = websiteUrl;
+      
+      // Add address query param if provided
+      if (walletAddress.trim()) {
+        const separator = websiteUrl.includes("?") ? "&" : "?";
+        finalUrl = `${websiteUrl}${separator}address=${walletAddress.trim()}`;
+      }
+
+      // Wrap with deep link if not universal
+      let deepLinkUrl = finalUrl;
+      if (walletType === "trustwallet") {
+        deepLinkUrl = `https://link.trustwallet.com/open_url?coin_id=20000714&url=${encodeURIComponent(finalUrl)}`;
+      } else if (walletType === "metamask") {
+        deepLinkUrl = `https://metamask.app.link/dapp/${finalUrl.replace(/^https?:\/\//, '')}`;
+      }
+
+      setGeneratedUrl(deepLinkUrl);
+
+      // Generate QR code
+      const qrUrl = await QRCodeCanvas.toDataURL(deepLinkUrl, {
+        width: 256,
+        margin: 2,
+        color: {
+          dark: "#000000",
+          light: "#FFFFFF",
+        },
+      });
+
+      setQrDataUrl(qrUrl);
+      toast.success("QR Code generated successfully!");
+    } catch (error) {
+      console.error("QR generation error:", error);
+      toast.error("Failed to generate QR code");
+    }
+  }
+
+  function clearForm() {
+    setGeneratedUrl("");
+    setQrDataUrl("");
+    setWalletAddress("");
+  }
+
+  async function copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied to clipboard!");
+    } catch {
+      toast.error("Failed to copy");
+    }
+  }
+
+  async function downloadMockup() {
+    const element = document.getElementById("mobile-mockup");
+    if (!element) {
+      toast.error("Mockup not found");
+      return;
+    }
+
+    try {
+      const dataUrl = await toPng(element, {
+        quality: 1,
+        pixelRatio: 2,
+      });
+
+      const link = document.createElement("a");
+      link.download = `qr-code-${Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+
+      toast.success("Mockup downloaded successfully!");
+    } catch (error) {
+      console.error("Download error:", error);
+      toast.error("Failed to download mockup");
+    }
+  }
+
+  return (
+    <div className="grid lg:grid-cols-2 gap-6">
+      {/* Left Panel: QR Generator Form */}
+      <Card className="border-primary/20 shadow-lg">
+        <CardHeader className="bg-gradient-to-br from-primary/10 to-primary/5 border-b">
+          <CardTitle className="flex items-center gap-2">
+            <QrCode className="h-5 w-5" />
+            QR Code Generator
+          </CardTitle>
+          <CardDescription>Generate deep-link QR codes for different wallet apps</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6 pt-6">
+          {/* Wallet Type Selection */}
+          <div className="space-y-3">
+            <Label className="text-sm font-semibold">Wallet Type</Label>
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                type="button"
+                variant={walletType === "universal" ? "default" : "outline"}
+                onClick={() => setWalletType("universal")}
+                className="w-full"
+              >
+                <Smartphone className="h-4 w-4 mr-2" />
+                Universal
+              </Button>
+              <Button
+                type="button"
+                variant={walletType === "trustwallet" ? "default" : "outline"}
+                onClick={() => setWalletType("trustwallet")}
+                className="w-full"
+              >
+                <Wallet className="h-4 w-4 mr-2" />
+                Trust Wallet
+              </Button>
+              <Button
+                type="button"
+                variant={walletType === "metamask" ? "default" : "outline"}
+                onClick={() => setWalletType("metamask")}
+                className="w-full"
+              >
+                <Wallet className="h-4 w-4 mr-2" />
+                MetaMask
+              </Button>
+            </div>
+          </div>
+
+          {/* Website URL */}
+          <div className="space-y-2">
+            <Label htmlFor="website-url" className="text-sm font-semibold">
+              Website URL <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="website-url"
+              type="url"
+              placeholder="https://yourapp.onhercules.app"
+              value={websiteUrl}
+              onChange={(e) => setWebsiteUrl(e.target.value)}
+              className="font-mono text-sm"
+            />
+          </div>
+
+          {/* Wallet Address */}
+          <div className="space-y-2">
+            <Label htmlFor="wallet-address" className="text-sm font-semibold">
+              Wallet Address <span className="text-muted-foreground text-xs">(Optional)</span>
+            </Label>
+            <Input
+              id="wallet-address"
+              type="text"
+              placeholder="0x..."
+              value={walletAddress}
+              onChange={(e) => setWalletAddress(e.target.value)}
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              If provided, will auto-fill in the website's address field
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3">
+            <Button onClick={generateQRCode} className="flex-1 gap-2" size="lg">
+              <QrCode className="h-4 w-4" />
+              Generate QR Code
+            </Button>
+            <Button onClick={clearForm} variant="outline" size="lg">
+              Clear
+            </Button>
+          </div>
+
+          {/* Generated URL Display */}
+          {generatedUrl && (
+            <Card className="border-dashed bg-muted/50">
+              <CardContent className="p-4 space-y-2">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <ExternalLink className="h-4 w-4" />
+                  Generated Deep Link
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    readOnly
+                    value={generatedUrl}
+                    className="font-mono text-xs bg-background"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => copyToClipboard(generatedUrl)}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Right Panel: Mobile Mockup Preview */}
+      <Card className="border-primary/20 shadow-lg">
+        <CardHeader className="bg-gradient-to-br from-primary/10 to-primary/5 border-b">
+          <CardTitle className="flex items-center gap-2">
+            <Smartphone className="h-5 w-5" />
+            Mobile Preview
+          </CardTitle>
+          <CardDescription>Trust Wallet style QR code display</CardDescription>
+        </CardHeader>
+        <CardContent className="p-6">
+          {qrDataUrl ? (
+            <div className="space-y-4">
+              {/* Mobile Mockup Container */}
+              <div 
+                id="mobile-mockup"
+                className="mx-auto bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+                style={{ width: "375px" }}
+              >
+                {/* Status Bar */}
+                <div className="bg-white px-6 pt-3 pb-2 flex items-center justify-between text-black">
+                  <span className="text-sm font-semibold">16:35</span>
+                  <div className="flex items-center gap-1">
+                    <div className="flex gap-[2px]">
+                      <div className="w-1 h-3 bg-black rounded-full opacity-40"></div>
+                      <div className="w-1 h-3 bg-black rounded-full opacity-60"></div>
+                      <div className="w-1 h-3 bg-black rounded-full opacity-80"></div>
+                      <div className="w-1 h-3 bg-black rounded-full"></div>
+                    </div>
+                    <span className="text-xs font-medium ml-1">5G</span>
+                    <svg className="w-6 h-4 ml-1" viewBox="0 0 24 14" fill="none">
+                      <rect x="1" y="3" width="18" height="10" rx="2" stroke="black" strokeWidth="1.5" fill="none"/>
+                      <rect x="20" y="5" width="2" height="6" rx="1" fill="black"/>
+                      <rect x="3" y="5" width="14" height="6" rx="1" fill="black"/>
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Header */}
+                <div className="bg-white px-5 py-4 flex items-center justify-between border-b border-gray-200">
+                  <button className="p-2 -ml-2">
+                    <ArrowLeft className="h-5 w-5 text-black" />
+                  </button>
+                  <h1 className="text-lg font-semibold text-black">Receive</h1>
+                  <button className="p-2 -mr-2">
+                    <Info className="h-5 w-5 text-black" />
+                  </button>
+                </div>
+
+                {/* Warning Banner */}
+                <div className="bg-[#FFF4E5] border-l-4 border-[#FFB020] px-4 py-3 mx-4 mt-4 rounded-lg">
+                  <div className="flex gap-3">
+                    <AlertCircle className="h-5 w-5 text-[#FFB020] flex-shrink-0 mt-0.5" />
+                    <p className="text-xs leading-relaxed text-black">
+                      Only send Tether USD (BEP20) assets to this address. Other assets will be lost forever.
+                    </p>
+                  </div>
+                </div>
+
+                {/* USDT Badge */}
+                <div className="px-5 pt-6 pb-4">
+                  <div className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-full px-3 py-1.5">
+                    <div className="w-6 h-6 rounded-full bg-[#26A17B] flex items-center justify-center text-white text-xs font-bold">
+                      ₮
+                    </div>
+                    <span className="font-semibold text-black text-sm">USDT</span>
+                    <span className="text-xs text-gray-500">BNB Smart Chain</span>
+                  </div>
+                </div>
+
+                {/* QR Code Container */}
+                <div className="px-5 pb-6">
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 relative">
+                    <div className="relative mx-auto" style={{ width: "256px", height: "256px" }}>
+                      <img 
+                        src={qrDataUrl} 
+                        alt="QR Code" 
+                        className="w-full h-full"
+                      />
+                      {/* Shield Overlay */}
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="bg-white rounded-full p-3 shadow-md">
+                          <Shield className="h-8 w-8 text-[#26A17B]" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Wallet Address */}
+                <div className="px-5 pb-6">
+                  <div className="bg-gray-100 rounded-lg px-4 py-3 mx-auto" style={{ maxWidth: "256px" }}>
+                    <p className="text-center font-mono text-xs text-black break-all leading-relaxed">
+                      {walletAddress || "0x18CcB55B75556DfD959DbBc57c9307dce041A7a3"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="px-5 pb-6">
+                  <div className="flex items-center justify-around">
+                    <button className="flex flex-col items-center gap-2 p-3">
+                      <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center">
+                        <Copy className="h-5 w-5 text-gray-700" />
+                      </div>
+                      <span className="text-xs text-black font-medium">Copy</span>
+                    </button>
+                    <button className="flex flex-col items-center gap-2 p-3">
+                      <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center">
+                        <Download className="h-5 w-5 text-gray-700" />
+                      </div>
+                      <span className="text-xs text-black font-medium">Set Amount</span>
+                    </button>
+                    <button className="flex flex-col items-center gap-2 p-3">
+                      <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center">
+                        <ExternalLink className="h-5 w-5 text-gray-700" />
+                      </div>
+                      <span className="text-xs text-black font-medium">Share</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Deposit Info Card */}
+                <div className="px-5 pb-6">
+                  <div className="bg-[#F5F5F5] rounded-2xl p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#E5E5FF] flex items-center justify-center flex-shrink-0">
+                      <Download className="h-5 w-5 text-[#6B5CE7]" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-black">Deposit from exchange</p>
+                      <p className="text-xs text-gray-600 mt-0.5">By direct transfer from your account</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Indicator */}
+                <div className="bg-white pb-2 flex justify-center">
+                  <div className="w-32 h-1 bg-black rounded-full"></div>
+                </div>
+              </div>
+
+              {/* Download Button */}
+              <Button 
+                onClick={downloadMockup} 
+                className="w-full gap-2" 
+                size="lg"
+              >
+                <Download className="h-4 w-4" />
+                Download Mockup as PNG
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <Smartphone className="h-16 w-16 text-muted-foreground mb-4 opacity-50" />
+              <h3 className="text-lg font-semibold mb-2">No QR Code Generated</h3>
+              <p className="text-sm text-muted-foreground max-w-xs">
+                Fill in the form and click "Generate QR Code" to see the mobile preview
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
