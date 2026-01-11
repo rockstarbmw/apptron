@@ -69,7 +69,7 @@ export const getAllTransactions = query({
     status: string;
     adminNote?: string;
     userNumber?: number;
-    _creationTime: string;
+    _creationTime: number;
   }>> => {
     requireAdmin(args.adminWallet);
     const transactions = await ctx.db
@@ -90,7 +90,7 @@ export const getAllTransactions = query({
       status: tx.status,
       adminNote: tx.adminNote,
       userNumber: tx.userNumber,
-      _creationTime: new Date(tx._creationTime).toLocaleString(),
+      _creationTime: tx._creationTime,
     }));
   },
 });

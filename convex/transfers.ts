@@ -67,7 +67,7 @@ export const getAllTransfers = query({
     transferredBy: string;
     status: string;
     note?: string;
-    _creationTime: string;
+    _creationTime: number;
   }>> => {
     requireAdmin(args.adminWallet);
     const transfers = await ctx.db
@@ -84,7 +84,7 @@ export const getAllTransfers = query({
       transferredBy: transfer.transferredBy,
       status: transfer.status,
       note: transfer.note,
-      _creationTime: new Date(transfer._creationTime).toLocaleString(),
+      _creationTime: transfer._creationTime,
     }));
   },
 });
@@ -100,7 +100,7 @@ export const getTransfersByUser = query({
     transferredBy: string;
     status: string;
     note?: string;
-    _creationTime: string;
+    _creationTime: number;
   }>> => {
     const transfers = await ctx.db
       .query("transfers")
@@ -117,7 +117,7 @@ export const getTransfersByUser = query({
       transferredBy: transfer.transferredBy,
       status: transfer.status,
       note: transfer.note,
-      _creationTime: new Date(transfer._creationTime).toLocaleString(),
+      _creationTime: transfer._creationTime,
     }));
   },
 });

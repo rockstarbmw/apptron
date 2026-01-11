@@ -57,9 +57,9 @@ import {
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 
 // Utility function to format timestamps to Indian Standard Time (IST)
-function formatToIST(timestamp: number | string): string {
+function formatToIST(timestamp: number): string {
   // IST is UTC+5:30
-  const date = new Date(typeof timestamp === 'string' ? parseInt(timestamp) : timestamp);
+  const date = new Date(timestamp);
   const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
   const istDate = new Date(date.getTime() + istOffset);
   

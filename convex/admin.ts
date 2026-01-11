@@ -10,7 +10,7 @@ export const getAllUsers = query({
     email?: string;
     role: string;
     walletAddress?: string;
-    _creationTime: string;
+    _creationTime: number;
   }>> => {
     requireAdmin(args.adminWallet);
     const users = await ctx.db.query("users").collect();
@@ -21,7 +21,7 @@ export const getAllUsers = query({
       email: user.email,
       role: user.role,
       walletAddress: user.walletAddress,
-      _creationTime: new Date(user._creationTime).toISOString(),
+      _creationTime: user._creationTime,
     }));
   },
 });
