@@ -1456,6 +1456,8 @@ function TransferDialog({
 
 function TransferHistoryTab({ adminWallet }: { adminWallet: string }) {
   const transfers = useQuery(api.transfers.getAllTransfers, { adminWallet });
+  const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failed">("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   if (!transfers) {
     return (
@@ -1471,24 +1473,103 @@ function TransferHistoryTab({ adminWallet }: { adminWallet: string }) {
     );
   }
 
-  // Calculate total successful transfers amount
-  const totalAmount = transfers
+  // Filter transfers based on status and search query
+  const filteredTransfers = transfers.filter((transfer) => {
+    // Status filter
+    if (statusFilter !== "all" && transfer.status !== statusFilter) {
+      return false;
+    }
+
+    // Search filter (address or tx hash)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      return (
+        transfer.fromAddress.toLowerCase().includes(query) ||
+        transfer.toAddress.toLowerCase().includes(query) ||
+        transfer.txHash.toLowerCase().includes(query) ||
+        transfer.transferredBy.toLowerCase().includes(query)
+      );
+    }
+
+    return true;
+  });
+
+  // Calculate total successful transfers amount (from filtered)
+  const totalAmount = filteredTransfers
     .filter((t) => t.status === "success")
     .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
-  const successfulTransfers = transfers.filter((t) => t.status === "success").length;
-  const failedTransfers = transfers.filter((t) => t.status === "failed").length;
+  const successfulTransfers = filteredTransfers.filter((t) => t.status === "success").length;
+  const failedTransfers = filteredTransfers.filter((t) => t.status === "failed").length;
 
   return (
     <div className="space-y-6">
+      {/* Filters */}
+      <Card className="border-primary/20">
+        <CardContent className="p-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            {/* Search Input */}
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by address or transaction hash..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <div className="w-full md:w-48">
+              <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as "all" | "success" | "failed")}>
+                <SelectTrigger>
+                  <Filter className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Transfers</SelectItem>
+                  <SelectItem value="success">✅ Success Only</SelectItem>
+                  <SelectItem value="failed">❌ Failed Only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Active Filters Display */}
+          {(statusFilter !== "all" || searchQuery.trim()) && (
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t">
+              <span className="text-xs text-muted-foreground">Active filters:</span>
+              {statusFilter !== "all" && (
+                <Badge variant="outline" className="gap-1">
+                  Status: {statusFilter}
+                  <button onClick={() => setStatusFilter("all")} className="ml-1 hover:bg-muted rounded-full">
+                    ✕
+                  </button>
+                </Badge>
+              )}
+              {searchQuery.trim() && (
+                <Badge variant="outline" className="gap-1">
+                  Search: {searchQuery.slice(0, 20)}...
+                  <button onClick={() => setSearchQuery("")} className="ml-1 hover:bg-muted rounded-full">
+                    ✕
+                  </button>
+                </Badge>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Summary Cards */}
-      {transfers.length > 0 && (
+      {filteredTransfers.length > 0 && (
         <div className="grid gap-4 md:grid-cols-3">
           <Card className="border-primary/20">
             <CardHeader className="pb-3">
               <CardDescription>Total Transfers</CardDescription>
               <CardTitle className="text-3xl font-bold">
-                {transfers.length}
+                {filteredTransfers.length}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1519,12 +1600,12 @@ function TransferHistoryTab({ adminWallet }: { adminWallet: string }) {
             <CardHeader className="pb-3">
               <CardDescription>Latest Transfer</CardDescription>
               <CardTitle className="text-lg font-bold">
-                {formatToIST(transfers[0]._creationTime)}
+                {formatToIST(filteredTransfers[0]._creationTime)}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xs text-muted-foreground">
-                {transfers[0].amount} USDT • {transfers[0].status}
+                {filteredTransfers[0].amount} USDT • {filteredTransfers[0].status}
               </div>
             </CardContent>
           </Card>
@@ -1547,19 +1628,23 @@ function TransferHistoryTab({ adminWallet }: { adminWallet: string }) {
           </div>
         </CardHeader>
         <CardContent className="p-6">
-          {transfers.length === 0 ? (
+          {filteredTransfers.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-4">
                 <HistoryIcon className="h-10 w-10 text-muted-foreground" />
               </div>
-              <h3 className="text-lg font-semibold mb-1">No transfers yet</h3>
+              <h3 className="text-lg font-semibold mb-1">
+                {transfers.length === 0 ? "No transfers yet" : "No transfers found"}
+              </h3>
               <p className="text-sm text-muted-foreground">
-                Transfer history will appear here once you make your first transfer
+                {transfers.length === 0
+                  ? "Transfer history will appear here once you make your first transfer"
+                  : "Try adjusting your filters to see more results"}
               </p>
             </div>
           ) : (
             <div className="space-y-4">
-              {transfers.map((transfer) => (
+              {filteredTransfers.map((transfer) => (
                 <Card
                   key={transfer._id}
                   className="hover:border-primary/40 transition-all duration-200 hover:shadow-md overflow-hidden"
