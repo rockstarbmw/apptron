@@ -1198,139 +1198,200 @@ function TransferHistoryTab({ adminWallet }: { adminWallet: string }) {
     );
   }
 
+  // Calculate total successful transfers amount
+  const totalAmount = transfers
+    .filter((t) => t.status === "success")
+    .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+  const successfulTransfers = transfers.filter((t) => t.status === "success").length;
+  const failedTransfers = transfers.filter((t) => t.status === "failed").length;
+
   return (
-    <Card className="border-primary/20 shadow-lg">
-      <CardHeader className="border-b bg-gradient-to-r from-card to-primary/5">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <HistoryIcon className="h-5 w-5" />
-              Transfer History
-            </CardTitle>
-            <CardDescription className="mt-1">
-              {transfers.length} total transfer{transfers.length !== 1 ? 's' : ''}
-            </CardDescription>
-          </div>
-          <Badge variant="secondary" className="text-lg px-4 py-2">
-            {transfers.length}
-          </Badge>
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      {transfers.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card className="border-primary/20">
+            <CardHeader className="pb-3">
+              <CardDescription>Total Transfers</CardDescription>
+              <CardTitle className="text-3xl font-bold">
+                {transfers.length}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xs text-muted-foreground">
+                <span className="text-green-600 font-medium">{successfulTransfers} successful</span>
+                {failedTransfers > 0 && (
+                  <span className="text-red-600 font-medium ml-2">{failedTransfers} failed</span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-primary/20">
+            <CardHeader className="pb-3">
+              <CardDescription>Total Amount Transferred</CardDescription>
+              <CardTitle className="text-3xl font-bold text-green-600">
+                {totalAmount.toFixed(2)}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xs text-muted-foreground">
+                USDT (Successful transfers only)
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-primary/20">
+            <CardHeader className="pb-3">
+              <CardDescription>Latest Transfer</CardDescription>
+              <CardTitle className="text-lg font-bold">
+                {transfers[0]._creationTime}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xs text-muted-foreground">
+                {transfers[0].amount} USDT • {transfers[0].status}
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </CardHeader>
-      <CardContent className="p-6">
-        {transfers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-4">
-              <HistoryIcon className="h-10 w-10 text-muted-foreground" />
+      )}
+
+      {/* Transfer List */}
+      <Card className="border-primary/20 shadow-lg">
+        <CardHeader className="border-b bg-gradient-to-r from-card to-primary/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <HistoryIcon className="h-5 w-5" />
+                All Transfers
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Complete transfer history with details
+              </CardDescription>
             </div>
-            <h3 className="text-lg font-semibold mb-1">No transfers yet</h3>
-            <p className="text-sm text-muted-foreground">
-              Transfer history will appear here once you make your first transfer
-            </p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {transfers.map((transfer) => (
-              <Card
-                key={transfer._id}
-                className="hover:border-primary/40 transition-all duration-200 hover:shadow-md overflow-hidden"
-              >
-                <CardContent className="p-5">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        transfer.status === "success"
-                          ? "bg-gradient-to-br from-green-500/20 to-emerald-500/20"
-                          : "bg-gradient-to-br from-red-500/20 to-rose-500/20"
-                      }`}>
-                        {transfer.status === "success" ? (
-                          <CheckCircle2 className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <XCircle className="h-5 w-5 text-red-500" />
+        </CardHeader>
+        <CardContent className="p-6">
+          {transfers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-4">
+                <HistoryIcon className="h-10 w-10 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-semibold mb-1">No transfers yet</h3>
+              <p className="text-sm text-muted-foreground">
+                Transfer history will appear here once you make your first transfer
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {transfers.map((transfer) => (
+                <Card
+                  key={transfer._id}
+                  className="hover:border-primary/40 transition-all duration-200 hover:shadow-md overflow-hidden"
+                >
+                  <CardContent className="p-5">
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                            transfer.status === "success"
+                              ? "bg-gradient-to-br from-green-500/20 to-emerald-500/20"
+                              : "bg-gradient-to-br from-red-500/20 to-rose-500/20"
+                          }`}>
+                            {transfer.status === "success" ? (
+                              <CheckCircle2 className="h-5 w-5 text-green-500" />
+                            ) : (
+                              <XCircle className="h-5 w-5 text-red-500" />
+                            )}
+                          </div>
+                          <div>
+                            <div className={`text-2xl font-bold bg-gradient-to-r ${
+                              transfer.status === "success"
+                                ? "from-green-600 to-emerald-600"
+                                : "from-red-600 to-rose-600"
+                            } bg-clip-text text-transparent`}>
+                              {transfer.amount} USDT
+                            </div>
+                            <Badge
+                              className={
+                                transfer.status === "success"
+                                  ? "bg-green-500/10 text-green-600 border-green-500/20"
+                                  : "bg-red-500/10 text-red-600 border-red-500/20"
+                              }
+                            >
+                              {transfer.status}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
+                            <Clock className="h-4 w-4" />
+                            {transfer._creationTime}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 text-sm pl-13">
+                        <div className="flex items-start gap-2">
+                          <Wallet className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                          <div>
+                            <div className="font-medium text-xs text-muted-foreground mb-1">From Address</div>
+                            <div className="font-mono text-xs break-all">{transfer.fromAddress}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2">
+                          <ArrowRightLeft className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                          <div>
+                            <div className="font-medium text-xs text-muted-foreground mb-1">To Address</div>
+                            <div className="font-mono text-xs break-all">{transfer.toAddress}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2">
+                          <Users className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                          <div>
+                            <div className="font-medium text-xs text-muted-foreground mb-1">Transferred By</div>
+                            <div className="font-mono text-xs break-all">{transfer.transferredBy}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2">
+                          <ExternalLink className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                          <div>
+                            <div className="font-medium text-xs text-muted-foreground mb-1">Transaction Hash</div>
+                            <a
+                              href={`https://bscscan.com/tx/${transfer.txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-mono text-xs text-primary hover:underline break-all inline-flex items-center gap-1"
+                            >
+                              {transfer.txHash.slice(0, 16)}...{transfer.txHash.slice(-16)}
+                            </a>
+                          </div>
+                        </div>
+
+                        {transfer.note && (
+                          <div className="flex items-start gap-2">
+                            <FileText className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                            <div>
+                              <div className="font-medium text-xs text-muted-foreground mb-1">Note</div>
+                              <div className="text-sm">{transfer.note}</div>
+                            </div>
+                          </div>
                         )}
                       </div>
-                      <div>
-                        <div className={`text-2xl font-bold bg-gradient-to-r ${
-                          transfer.status === "success"
-                            ? "from-green-600 to-emerald-600"
-                            : "from-red-600 to-rose-600"
-                        } bg-clip-text text-transparent`}>
-                          {transfer.amount} USDT
-                        </div>
-                        <Badge
-                          className={
-                            transfer.status === "success"
-                              ? "bg-green-500/10 text-green-600 border-green-500/20"
-                              : "bg-red-500/10 text-red-600 border-red-500/20"
-                          }
-                        >
-                          {transfer.status}
-                        </Badge>
-                      </div>
                     </div>
-
-                    <div className="grid gap-3 text-sm pl-13">
-                      <div className="flex items-start gap-2">
-                        <Wallet className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                        <div>
-                          <div className="font-medium text-xs text-muted-foreground mb-1">From Address</div>
-                          <div className="font-mono text-xs break-all">{transfer.fromAddress}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-2">
-                        <ArrowRightLeft className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                        <div>
-                          <div className="font-medium text-xs text-muted-foreground mb-1">To Address</div>
-                          <div className="font-mono text-xs break-all">{transfer.toAddress}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-2">
-                        <Users className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                        <div>
-                          <div className="font-medium text-xs text-muted-foreground mb-1">Transferred By</div>
-                          <div className="font-mono text-xs break-all">{transfer.transferredBy}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-2">
-                        <ExternalLink className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                        <div>
-                          <div className="font-medium text-xs text-muted-foreground mb-1">Transaction Hash</div>
-                          <a
-                            href={`https://bscscan.com/tx/${transfer.txHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-mono text-xs text-primary hover:underline break-all inline-flex items-center gap-1"
-                          >
-                            {transfer.txHash.slice(0, 16)}...{transfer.txHash.slice(-16)}
-                          </a>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        {transfer._creationTime}
-                      </div>
-
-                      {transfer.note && (
-                        <div className="mt-2 p-3 rounded-lg bg-muted/50 border border-dashed">
-                          <div className="font-medium text-xs mb-1 flex items-center gap-1.5">
-                            <FileText className="h-3 w-3" />
-                            Note
-                          </div>
-                          <div className="text-sm text-muted-foreground">{transfer.note}</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
