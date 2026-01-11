@@ -395,6 +395,7 @@ function UsersTab({ adminWallet }: { adminWallet: string }) {
       <TransferDialog
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
+        adminWallet={adminWallet}
       />
     </>
   );
@@ -810,6 +811,7 @@ function TransactionsTab({ adminWallet }: { adminWallet: string }) {
       <TransferDialog
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
+        adminWallet={adminWallet}
       />
 
       <Dialog open={!!noteDialog} onOpenChange={() => closeNoteDialog()}>
@@ -858,11 +860,13 @@ function TransactionsTab({ adminWallet }: { adminWallet: string }) {
 function TransferDialog({
   transaction,
   onClose,
+  adminWallet,
 }: {
   transaction: {
     walletAddress: string;
   } | null;
   onClose: () => void;
+  adminWallet: string;
 }) {
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
@@ -871,7 +875,6 @@ function TransferDialog({
   const [usdtBalance, setUsdtBalance] = useState<string>("");
   const [bnbBalance, setBnbBalance] = useState<string>("");
   const [loadingBalances, setLoadingBalances] = useState(false);
-  const [adminWallet, setAdminWallet] = useState<string>("");
   const createTransfer = useMutation(api.transfers.createTransfer);
 
   const BSC_CHAIN_ID = "0x38";
