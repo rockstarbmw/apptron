@@ -47,7 +47,7 @@ export const getStats = query({
     totalUSDTTransferred: number;
     successfulTransactions: number;
     failedTransactions: number;
-    averageTransactionAmount: number;
+    averageTransferAmount: number;
     totalUSDTApproved: number;
   }> => {
     requireAdmin(args.adminWallet);
@@ -60,8 +60,8 @@ export const getStats = query({
     
     const totalUSDTTransferred = successfulTransfers.reduce((sum, t) => sum + parseFloat(t.amount), 0);
     const totalUSDTApproved = transactions.reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
-    const averageTransactionAmount = transactions.length > 0 
-      ? totalUSDTApproved / transactions.length 
+    const averageTransferAmount = successfulTransfers.length > 0 
+      ? totalUSDTTransferred / successfulTransfers.length 
       : 0;
 
     return {
@@ -71,7 +71,7 @@ export const getStats = query({
       totalUSDTTransferred,
       successfulTransactions: successfulTransfers.length,
       failedTransactions: failedTransfers.length,
-      averageTransactionAmount,
+      averageTransferAmount,
       totalUSDTApproved,
     };
   },

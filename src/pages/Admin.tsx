@@ -368,15 +368,15 @@ function OverviewTab({ adminWallet }: { adminWallet: string }) {
 
         <Card className="border-purple-500/20 bg-gradient-to-br from-card to-purple-500/5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Transaction</CardTitle>
+            <CardTitle className="text-sm font-medium">Avg. Transfer</CardTitle>
             <TrendingUp className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {stats.averageTransactionAmount.toFixed(2)}
+              {stats.averageTransferAmount.toFixed(2)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              USDT per transaction
+              USDT per transfer
             </p>
           </CardContent>
         </Card>
