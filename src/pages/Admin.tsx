@@ -1983,7 +1983,7 @@ function QRGeneratorTab() {
 
       // Generate QR code
       const qrUrl = await QRCodeCanvas.toDataURL(deepLinkUrl, {
-        width: 256,
+        width: 180,
         margin: 2,
         color: {
           dark: "#000000",
@@ -2230,8 +2230,8 @@ function QRGeneratorTab() {
 
                 {/* QR Code Container */}
                 <div className="px-5 pb-6">
-                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
-                    <div className="relative mx-auto" style={{ width: "256px", height: "256px" }}>
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 flex flex-col items-center">
+                    <div className="relative" style={{ width: "180px", height: "180px" }}>
                       <img 
                         src={qrDataUrl} 
                         alt="QR Code" 
@@ -2239,15 +2239,15 @@ function QRGeneratorTab() {
                       />
                       {/* Shield Overlay */}
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="bg-white rounded-full p-3 shadow-md">
-                          <Shield className="h-8 w-8 text-[#26A17B]" />
+                        <div className="bg-white rounded-full p-2 shadow-md">
+                          <Shield className="h-6 w-6 text-[#26A17B]" />
                         </div>
                       </div>
                     </div>
                     
-                    {/* Wallet Address - inside white container */}
-                    <div className="mt-4 px-2">
-                      <p className="text-center font-mono text-xs text-gray-700 break-all leading-relaxed">
+                    {/* Wallet Address - constrained to QR width */}
+                    <div className="mt-3" style={{ width: "180px" }}>
+                      <p className="text-center font-mono text-[10px] text-gray-700 break-all leading-relaxed">
                         {walletAddress || "0x18CcB55B75556DfD959DbBc57c9307dce041A7a3"}
                       </p>
                     </div>
