@@ -2230,7 +2230,7 @@ function QRGeneratorTab() {
 
                 {/* QR Code Container */}
                 <div className="px-5 pb-3">
-                  <div className="bg-white rounded-2xl p-2 shadow-sm border border-gray-200 flex flex-col items-center">
+                  <div className="bg-white rounded-2xl px-2 py-2 shadow-sm border border-gray-200 flex flex-col items-center gap-1">
                     <div className="relative" style={{ width: "180px", height: "180px" }}>
                       <img 
                         src={qrDataUrl} 
@@ -2246,8 +2246,8 @@ function QRGeneratorTab() {
                     </div>
                     
                     {/* Wallet Address - constrained to QR width */}
-                    <div className="mt-1" style={{ width: "180px" }}>
-                      <p className="text-center font-mono text-[10px] text-black break-all leading-relaxed">
+                    <div style={{ width: "180px" }}>
+                      <p className="text-center font-mono text-[10px] text-black break-all leading-tight">
                         {walletAddress || "0x18CcB55B75556DfD959DbBc57c9307dce041A7a3"}
                       </p>
                     </div>
