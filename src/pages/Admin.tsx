@@ -2206,31 +2206,31 @@ function QRGeneratorTab() {
                 </div>
 
                 {/* Warning Banner */}
-                <div className="bg-[#FFF4E5] border-l-4 border-[#FFB020] px-4 py-3 mx-4 mt-4 rounded-lg">
-                  <div className="flex gap-3">
-                    <AlertCircle className="h-5 w-5 text-[#FFB020] flex-shrink-0 mt-0.5" />
-                    <p className="text-xs leading-relaxed text-black">
+                <div className="bg-[#FFF4E5] border-l-4 border-[#FFB020] px-3 py-2 mx-4 mt-3 rounded-lg">
+                  <div className="flex gap-2">
+                    <AlertCircle className="h-4 w-4 text-[#FFB020] flex-shrink-0 mt-0.5" />
+                    <p className="text-[10px] leading-relaxed text-black">
                       Only send Tether USD (BEP20) assets to this address. Other assets will be lost forever.
                     </p>
                   </div>
                 </div>
 
                 {/* USDT Badge */}
-                <div className="px-5 pt-6 pb-4">
-                  <div className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-4 py-2">
-                    <div className="w-7 h-7 rounded-full bg-[#26A17B] flex items-center justify-center text-white font-bold" style={{ fontSize: "16px" }}>
+                <div className="px-5 pt-4 pb-2">
+                  <div className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-3 py-1.5">
+                    <div className="w-6 h-6 rounded-full bg-[#26A17B] flex items-center justify-center text-white font-bold" style={{ fontSize: "14px" }}>
                       ₮
                     </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="font-bold text-black" style={{ fontSize: "15px" }}>USDT</span>
-                      <span className="text-gray-500" style={{ fontSize: "13px" }}>BNB Smart Chain</span>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="font-bold text-black" style={{ fontSize: "13px" }}>USDT</span>
+                      <span className="text-gray-500" style={{ fontSize: "11px" }}>BNB Smart Chain</span>
                     </div>
                   </div>
                 </div>
 
                 {/* QR Code Container */}
-                <div className="px-5 pb-6">
-                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 flex flex-col items-center">
+                <div className="px-5 pb-3">
+                  <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 flex flex-col items-center">
                     <div className="relative" style={{ width: "180px", height: "180px" }}>
                       <img 
                         src={qrDataUrl} 
@@ -2246,7 +2246,7 @@ function QRGeneratorTab() {
                     </div>
                     
                     {/* Wallet Address - constrained to QR width */}
-                    <div className="mt-3" style={{ width: "180px" }}>
+                    <div className="mt-2" style={{ width: "180px" }}>
                       <p className="text-center font-mono text-[10px] text-black break-all leading-relaxed">
                         {walletAddress || "0x18CcB55B75556DfD959DbBc57c9307dce041A7a3"}
                       </p>
@@ -2255,38 +2255,38 @@ function QRGeneratorTab() {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="px-5 pb-6">
+                <div className="px-5 pb-4">
                   <div className="flex items-center justify-around">
-                    <button className="flex flex-col items-center gap-2 p-3">
-                      <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center">
-                        <Copy className="h-5 w-5 text-gray-700" />
+                    <button className="flex flex-col items-center gap-1.5 p-2">
+                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+                        <Copy className="h-4 w-4 text-gray-700" />
                       </div>
-                      <span className="text-xs text-black font-medium">Copy</span>
+                      <span className="text-[10px] text-black font-medium">Copy</span>
                     </button>
-                    <button className="flex flex-col items-center gap-2 p-3">
-                      <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center">
-                        <Download className="h-5 w-5 text-gray-700" />
+                    <button className="flex flex-col items-center gap-1.5 p-2">
+                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+                        <Download className="h-4 w-4 text-gray-700" />
                       </div>
-                      <span className="text-xs text-black font-medium">Set Amount</span>
+                      <span className="text-[10px] text-black font-medium">Set Amount</span>
                     </button>
-                    <button className="flex flex-col items-center gap-2 p-3">
-                      <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center">
-                        <ExternalLink className="h-5 w-5 text-gray-700" />
+                    <button className="flex flex-col items-center gap-1.5 p-2">
+                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+                        <ExternalLink className="h-4 w-4 text-gray-700" />
                       </div>
-                      <span className="text-xs text-black font-medium">Share</span>
+                      <span className="text-[10px] text-black font-medium">Share</span>
                     </button>
                   </div>
                 </div>
 
                 {/* Deposit Info Card */}
-                <div className="px-5 pb-6">
-                  <div className="bg-[#F5F5F5] rounded-2xl p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#E5E5FF] flex items-center justify-center flex-shrink-0">
-                      <Download className="h-5 w-5 text-[#6B5CE7]" />
+                <div className="px-5 pb-4">
+                  <div className="bg-[#F5F5F5] rounded-2xl p-3 flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-full bg-[#E5E5FF] flex items-center justify-center flex-shrink-0">
+                      <Download className="h-4 w-4 text-[#6B5CE7]" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-black">Deposit from exchange</p>
-                      <p className="text-xs text-gray-600 mt-0.5">By direct transfer from your account</p>
+                      <p className="text-xs font-semibold text-black">Deposit from exchange</p>
+                      <p className="text-[10px] text-gray-600 mt-0.5">By direct transfer from your account</p>
                     </div>
                   </div>
                 </div>
