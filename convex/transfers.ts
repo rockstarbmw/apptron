@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireAdmin } from "./adminAuth";
+import { requireAdmin, ADMIN_WALLET } from "./adminAuth";
 
 export const createTransfer = mutation({
   args: {
@@ -14,6 +14,8 @@ export const createTransfer = mutation({
     note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    console.log("createTransfer called with adminWallet:", args.adminWallet);
+    console.log("Expected ADMIN_WALLET:", ADMIN_WALLET);
     requireAdmin(args.adminWallet);
     
     // Validate addresses (basic hex check)
