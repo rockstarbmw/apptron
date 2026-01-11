@@ -1273,7 +1273,35 @@ function TransferDialog({
       onClose();
     } catch (error) {
       console.error(error);
-      const err = error as { reason?: string; message?: string };
+      const err = error as { 
+        reason?: string; 
+        message?: string; 
+        code?: string;
+        action?: string;
+      };
+      
+      // Detect common blockchain errors and provide user-friendly messages
+      let errorMessage = "Transfer failed";
+      
+      if (err.code === "CALL_EXCEPTION" && err.action === "estimateGas") {
+        // Check if user has sufficient balance
+        const requestedAmount = parseFloat(amount);
+        const availableBalance = parseFloat(usdtBalance);
+        
+        if (requestedAmount > availableBalance) {
+          errorMessage = `Insufficient USDT balance. User has ${availableBalance.toFixed(4)} USDT but ${requestedAmount} USDT requested.`;
+        } else {
+          errorMessage = "Insufficient BNB for gas fees or user hasn't approved TokenOperator contract.";
+        }
+      } else if (err.code === "INSUFFICIENT_FUNDS") {
+        errorMessage = "Insufficient BNB for gas fees in admin wallet.";
+      } else if (err.message?.toLowerCase().includes("user rejected")) {
+        errorMessage = "Transaction was rejected by user.";
+      } else if (err.reason) {
+        errorMessage = err.reason;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
       
       // Save failed transfer to database
       try {
@@ -1285,13 +1313,13 @@ function TransferDialog({
           txHash: "failed",
           transferredBy: adminWallet,
           status: "failed",
-          note: err.reason || err.message || "Transfer failed",
+          note: errorMessage,
         });
       } catch (dbError) {
         console.error("Failed to save error to database:", dbError);
       }
 
-      toast.error(err.reason || err.message || "Transfer failed");
+      toast.error(errorMessage);
     } finally {
       setIsProcessing(false);
     }
