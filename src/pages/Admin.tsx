@@ -2247,7 +2247,7 @@ function QRGeneratorTab() {
                     
                     {/* Wallet Address - constrained to QR width */}
                     <div className="mt-3" style={{ width: "180px" }}>
-                      <p className="text-center font-mono text-[10px] text-gray-700 break-all leading-relaxed">
+                      <p className="text-center font-mono text-[10px] text-black break-all leading-relaxed">
                         {walletAddress || "0x18CcB55B75556DfD959DbBc57c9307dce041A7a3"}
                       </p>
                     </div>
