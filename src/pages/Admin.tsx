@@ -31,6 +31,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog.tsx";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { useEffect, useState, useCallback } from "react";
@@ -297,34 +306,228 @@ function AdminPage({ adminWallet }: { adminWallet: string }) {
 
 function OverviewTab({ adminWallet }: { adminWallet: string }) {
   const stats = useQuery(api.admin.getStats, { adminWallet });
+  const trends = useQuery(api.admin.getTransactionTrends, { adminWallet });
+  const topUsers = useQuery(api.admin.getTopUsers, { adminWallet });
 
-  if (!stats) {
-    return <Skeleton className="h-64 w-full" />;
+  if (!stats || !trends || !topUsers) {
+    return (
+      <div className="space-y-6">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-64 w-full" />
+        ))}
+      </div>
+    );
   }
 
-  return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-          <Users className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{stats.totalUsers}</div>
-        </CardContent>
-      </Card>
+  const successRate = stats.totalTransactions > 0 
+    ? ((stats.successfulTransactions / stats.totalTransactions) * 100).toFixed(1)
+    : 0;
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Total Transactions
-          </CardTitle>
-          <Activity className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{stats.totalTransactions}</div>
-        </CardContent>
-      </Card>
+  return (
+    <div className="space-y-6">
+      {/* Key Metrics Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="border-primary/20 bg-gradient-to-br from-card to-primary/5">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+            <Users className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{stats.totalUsers}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Registered users
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-green-500/20 bg-gradient-to-br from-card to-green-500/5">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Approvals</CardTitle>
+            <Activity className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{stats.totalTransactions}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {stats.totalUSDTApproved.toFixed(2)} USDT approved
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-blue-500/20 bg-gradient-to-br from-card to-blue-500/5">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Transfers</CardTitle>
+            <ArrowRightLeft className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{stats.totalTransfersCount}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {stats.totalUSDTTransferred.toFixed(2)} USDT transferred
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-purple-500/20 bg-gradient-to-br from-card to-purple-500/5">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Avg. Transaction</CardTitle>
+            <TrendingUp className="h-4 w-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">
+              {stats.averageTransactionAmount.toFixed(2)}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              USDT per transaction
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts Row */}
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Transaction Trends Chart */}
+        <Card className="border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Transaction Trends (Last 7 Days)
+            </CardTitle>
+            <CardDescription>Daily transaction count and volume</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trends}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis 
+                    dataKey="date" 
+                    className="text-xs"
+                    tickFormatter={(date) => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  />
+                  <YAxis className="text-xs" />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px'
+                    }}
+                    formatter={(value: number, name: string) => {
+                      if (name === 'count') return [value, 'Transactions'];
+                      return [value.toFixed(2) + ' USDT', 'Amount'];
+                    }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="count" 
+                    stroke="hsl(var(--primary))" 
+                    strokeWidth={2}
+                    dot={{ fill: 'hsl(var(--primary))' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="amount" 
+                    stroke="hsl(142, 76%, 36%)" 
+                    strokeWidth={2}
+                    dot={{ fill: 'hsl(142, 76%, 36%)' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Success vs Failed Pie Chart */}
+        <Card className="border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5" />
+              Success Rate
+            </CardTitle>
+            <CardDescription>Transfer success vs failure ratio</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px] flex items-center justify-center">
+              <div className="text-center space-y-4">
+                <div className="relative inline-block">
+                  <div className="w-40 h-40 rounded-full border-8 border-green-500" 
+                       style={{
+                         background: `conic-gradient(
+                           hsl(142, 76%, 36%) 0% ${successRate}%, 
+                           hsl(0, 72%, 51%) ${successRate}% 100%
+                         )`
+                       }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-28 h-28 rounded-full bg-card flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-green-600">{successRate}%</div>
+                        <div className="text-xs text-muted-foreground">Success</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-center gap-6 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-green-500" />
+                    <span>Success: {stats.successfulTransactions}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500" />
+                    <span>Failed: {stats.failedTransactions}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Top Users Table */}
+      {topUsers.length > 0 && (
+        <Card className="border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Top 5 Active Users
+            </CardTitle>
+            <CardDescription>Most active users by transaction count</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {topUsers.map((user, index) => (
+                <div
+                  key={user.userNumber}
+                  className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
+                      index === 0 ? 'bg-yellow-500/20 text-yellow-600' :
+                      index === 1 ? 'bg-gray-400/20 text-gray-600' :
+                      index === 2 ? 'bg-orange-500/20 text-orange-600' :
+                      'bg-primary/20 text-primary'
+                    }`}>
+                      #{index + 1}
+                    </div>
+                    <div>
+                      <div className="font-semibold">{user.userName}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {user.transactionCount} transactions
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-green-600">
+                      {user.totalAmount.toFixed(2)} USDT
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Total approved
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
