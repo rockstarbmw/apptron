@@ -2217,12 +2217,14 @@ function QRGeneratorTab() {
 
                 {/* USDT Badge */}
                 <div className="px-5 pt-6 pb-4">
-                  <div className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-full px-3 py-1.5">
-                    <div className="w-6 h-6 rounded-full bg-[#26A17B] flex items-center justify-center text-white text-xs font-bold">
+                  <div className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-4 py-2">
+                    <div className="w-7 h-7 rounded-full bg-[#26A17B] flex items-center justify-center text-white font-bold" style={{ fontSize: "16px" }}>
                       ₮
                     </div>
-                    <span className="font-semibold text-black text-sm">USDT</span>
-                    <span className="text-xs text-gray-500">BNB Smart Chain</span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-bold text-black" style={{ fontSize: "15px" }}>USDT</span>
+                      <span className="text-gray-500" style={{ fontSize: "13px" }}>BNB Smart Chain</span>
+                    </div>
                   </div>
                 </div>
 
