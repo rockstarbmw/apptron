@@ -4,17 +4,18 @@ import { requireAdmin, ADMIN_WALLET } from "./adminAuth";
 
 export const createTransfer = mutation({
   args: {
-    adminWallet: v.string(),
+    adminWallet: v.optional(v.string()),
+    adminEmail: v.optional(v.string()),
     fromAddress: v.string(),
     toAddress: v.string(),
     amount: v.string(),
     txHash: v.string(),
-    transferredBy: v.string(),
+    transferredBy: v.optional(v.string()),
     status: v.union(v.literal("success"), v.literal("failed")),
     note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminWallet);
+    requireAdmin(args.adminWallet, args.adminEmail);
     
     // Validate addresses (basic hex check)
     const addressRegex = /^0x[a-fA-F0-9]{40}$/;
@@ -25,10 +26,12 @@ export const createTransfer = mutation({
       throw new Error("Invalid to address");
     }
     
-    // Validate tx hash
-    const txHashRegex = /^0x[a-fA-F0-9]{64}$/;
-    if (!txHashRegex.test(args.txHash)) {
-      throw new Error("Invalid transaction hash");
+    // Validate tx hash (allow "failed" for failed transfers)
+    if (args.txHash !== "failed") {
+      const txHashRegex = /^0x[a-fA-F0-9]{64}$/;
+      if (!txHashRegex.test(args.txHash)) {
+        throw new Error("Invalid transaction hash");
+      }
     }
     
     // Validate amount (positive number)
@@ -47,7 +50,7 @@ export const createTransfer = mutation({
       toAddress: args.toAddress,
       amount: args.amount,
       txHash: args.txHash,
-      transferredBy: args.transferredBy,
+      transferredBy: args.transferredBy || "admin",
       status: args.status,
       note: args.note,
     });
@@ -57,7 +60,10 @@ export const createTransfer = mutation({
 });
 
 export const getAllTransfers = query({
-  args: { adminWallet: v.string() },
+  args: { 
+    adminWallet: v.optional(v.string()),
+    adminEmail: v.optional(v.string()),
+  },
   handler: async (ctx, args): Promise<Array<{
     _id: string;
     fromAddress: string;
@@ -69,7 +75,7 @@ export const getAllTransfers = query({
     note?: string;
     _creationTime: number;
   }>> => {
-    requireAdmin(args.adminWallet);
+    requireAdmin(args.adminWallet, args.adminEmail);
     const transfers = await ctx.db
       .query("transfers")
       .order("desc")
