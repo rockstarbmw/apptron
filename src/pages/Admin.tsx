@@ -179,7 +179,7 @@ export default function Admin() {
   return <AdminPage adminWallet={adminWallet} />;
 }
 
-function AdminPage({ adminWallet, adminEmail }: { adminWallet?: string; adminEmail?: string }) {
+export function AdminPage({ adminWallet, adminEmail }: { adminWallet?: string; adminEmail?: string }) {
   const navigate = useNavigate();
   const { signoutRedirect } = useAuth();
 
