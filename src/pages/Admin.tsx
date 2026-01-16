@@ -358,10 +358,10 @@ function AdminPage({ adminWallet, adminEmail }: { adminWallet?: string; adminEma
   );
 }
 
-function OverviewTab({ adminWallet }: { adminWallet: string }) {
-  const stats = useQuery(api.admin.getStats, { adminWallet });
-  const trends = useQuery(api.admin.getTransactionTrends, { adminWallet });
-  const topUsers = useQuery(api.admin.getTopUsers, { adminWallet });
+function OverviewTab({ adminWallet, adminEmail }: { adminWallet?: string; adminEmail?: string }) {
+  const stats = useQuery(api.admin.getStats, adminWallet ? { adminWallet } : adminEmail ? { adminEmail } : "skip");
+  const trends = useQuery(api.admin.getTransactionTrends, adminWallet ? { adminWallet } : adminEmail ? { adminEmail } : "skip");
+  const topUsers = useQuery(api.admin.getTopUsers, adminWallet ? { adminWallet } : adminEmail ? { adminEmail } : "skip");
 
   if (!stats || !trends || !topUsers) {
     return (
@@ -586,8 +586,8 @@ function OverviewTab({ adminWallet }: { adminWallet: string }) {
   );
 }
 
-function UsersTab({ adminWallet }: { adminWallet: string }) {
-  const users = useQuery(api.admin.getAllUsers, { adminWallet });
+function UsersTab({ adminWallet, adminEmail }: { adminWallet?: string; adminEmail?: string }) {
+  const users = useQuery(api.admin.getAllUsers, adminWallet ? { adminWallet } : adminEmail ? { adminEmail } : "skip");
   const updateUserRole = useMutation(api.admin.updateUserRole);
   const [selectedTransaction, setSelectedTransaction] = useState<{
     walletAddress: string;
@@ -595,7 +595,11 @@ function UsersTab({ adminWallet }: { adminWallet: string }) {
 
   async function handleRoleChange(userId: Id<"users">, newRole: "admin" | "user") {
     try {
-      await updateUserRole({ adminWallet, userId, role: newRole });
+      if (adminWallet) {
+        await updateUserRole({ adminWallet, userId, role: newRole });
+      } else if (adminEmail) {
+        await updateUserRole({ adminEmail, userId, role: newRole });
+      }
       toast.success("User role updated");
     } catch (error) {
       toast.error("Failed to update user role");
@@ -681,8 +685,8 @@ function UsersTab({ adminWallet }: { adminWallet: string }) {
 }
 
 
-function TransactionsTab({ adminWallet }: { adminWallet: string }) {
-  const transactions = useQuery(api.transactions.getAllTransactions, { adminWallet });
+function TransactionsTab({ adminWallet, adminEmail }: { adminWallet?: string; adminEmail?: string }) {
+  const transactions = useQuery(api.transactions.getAllTransactions, adminWallet ? { adminWallet } : adminEmail ? { adminEmail } : "skip");
   const updateNote = useMutation(api.transactions.updateTransactionNote);
   const [selectedTransaction, setSelectedTransaction] = useState<{
     walletAddress: string;
@@ -720,11 +724,19 @@ function TransactionsTab({ adminWallet }: { adminWallet: string }) {
 
     setIsSavingNote(true);
     try {
-      await updateNote({
-        adminWallet,
-        transactionId: noteDialog.transactionId as Id<"transactions">,
-        note: noteText,
-      });
+      if (adminWallet) {
+        await updateNote({
+          adminWallet,
+          transactionId: noteDialog.transactionId as Id<"transactions">,
+          note: noteText,
+        });
+      } else if (adminEmail) {
+        await updateNote({
+          adminEmail,
+          transactionId: noteDialog.transactionId as Id<"transactions">,
+          note: noteText,
+        });
+      }
       toast.success("Note saved successfully");
       closeNoteDialog();
     } catch (error) {
@@ -1140,12 +1152,14 @@ function TransferDialog({
   transaction,
   onClose,
   adminWallet,
+  adminEmail,
 }: {
   transaction: {
     walletAddress: string;
   } | null;
   onClose: () => void;
-  adminWallet: string;
+  adminWallet?: string;
+  adminEmail?: string;
 }) {
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
@@ -1319,7 +1333,7 @@ function TransferDialog({
         toAddress,
         amount,
         txHash: receipt.hash,
-        transferredBy: adminWallet,
+        transferredBy: adminWallet || adminEmail || "unknown",
         status: "success",
       });
 
@@ -1367,7 +1381,7 @@ function TransferDialog({
           toAddress,
           amount,
           txHash: "failed",
-          transferredBy: adminWallet,
+          transferredBy: adminWallet || adminEmail || "unknown",
           status: "failed",
           note: errorMessage,
         });
@@ -1490,8 +1504,8 @@ function TransferDialog({
   );
 }
 
-function TransferHistoryTab({ adminWallet }: { adminWallet: string }) {
-  const transfers = useQuery(api.transfers.getAllTransfers, { adminWallet });
+function TransferHistoryTab({ adminWallet, adminEmail }: { adminWallet?: string; adminEmail?: string }) {
+  const transfers = useQuery(api.transfers.getAllTransfers, adminWallet ? { adminWallet } : adminEmail ? { adminEmail } : "skip");
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failed">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -1789,7 +1803,7 @@ function TransferHistoryTab({ adminWallet }: { adminWallet: string }) {
   );
 }
 
-function TransferTab({ adminWallet }: { adminWallet: string }) {
+function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminEmail?: string }) {
   const [fromAddress, setFromAddress] = useState("");
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
@@ -1902,7 +1916,7 @@ function TransferTab({ adminWallet }: { adminWallet: string }) {
         toAddress,
         amount,
         txHash: receipt.hash,
-        transferredBy: adminWallet,
+        transferredBy: adminWallet || adminEmail || "unknown",
         status: "success",
       });
 
@@ -1924,7 +1938,7 @@ function TransferTab({ adminWallet }: { adminWallet: string }) {
           toAddress,
           amount,
           txHash: "failed",
-          transferredBy: adminWallet,
+          transferredBy: adminWallet || adminEmail || "unknown",
           status: "failed",
           note: err.reason || err.message || "Transfer failed",
         });

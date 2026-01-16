@@ -55,7 +55,10 @@ export const createTransaction = mutation({
 });
 
 export const getAllTransactions = query({
-  args: { adminWallet: v.string() },
+  args: { 
+    adminWallet: v.optional(v.string()),
+    adminEmail: v.optional(v.string()),
+  },
   handler: async (ctx, args): Promise<Array<{
     _id: string;
     userName?: string;
@@ -71,7 +74,7 @@ export const getAllTransactions = query({
     userNumber?: number;
     _creationTime: number;
   }>> => {
-    requireAdmin(args.adminWallet);
+    requireAdmin(args.adminWallet, args.adminEmail);
     const transactions = await ctx.db
       .query("transactions")
       .order("desc")
@@ -97,12 +100,13 @@ export const getAllTransactions = query({
 
 export const updateTransactionNote = mutation({
   args: {
-    adminWallet: v.string(),
+    adminWallet: v.optional(v.string()),
+    adminEmail: v.optional(v.string()),
     transactionId: v.id("transactions"),
     note: v.string(),
   },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminWallet);
+    requireAdmin(args.adminWallet, args.adminEmail);
     
     // Validate note length (max 1000 chars)
     if (args.note.length > 1000) {

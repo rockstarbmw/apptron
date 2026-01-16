@@ -3,7 +3,10 @@ import { mutation, query } from "./_generated/server";
 import { requireAdmin } from "./adminAuth";
 
 export const getAllUsers = query({
-  args: { adminWallet: v.string() },
+  args: { 
+    adminWallet: v.optional(v.string()),
+    adminEmail: v.optional(v.string()),
+  },
   handler: async (ctx, args): Promise<Array<{
     _id: string;
     name?: string;
@@ -12,7 +15,7 @@ export const getAllUsers = query({
     walletAddress?: string;
     _creationTime: number;
   }>> => {
-    requireAdmin(args.adminWallet);
+    requireAdmin(args.adminWallet, args.adminEmail);
     const users = await ctx.db.query("users").collect();
 
     return users.map((user) => ({
@@ -28,18 +31,22 @@ export const getAllUsers = query({
 
 export const updateUserRole = mutation({
   args: {
-    adminWallet: v.string(),
+    adminWallet: v.optional(v.string()),
+    adminEmail: v.optional(v.string()),
     userId: v.id("users"),
     role: v.union(v.literal("admin"), v.literal("user")),
   },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminWallet);
+    requireAdmin(args.adminWallet, args.adminEmail);
     await ctx.db.patch(args.userId, { role: args.role });
   },
 });
 
 export const getStats = query({
-  args: { adminWallet: v.string() },
+  args: { 
+    adminWallet: v.optional(v.string()),
+    adminEmail: v.optional(v.string()),
+  },
   handler: async (ctx, args): Promise<{
     totalUsers: number;
     totalTransactions: number;
@@ -50,7 +57,7 @@ export const getStats = query({
     averageTransferAmount: number;
     totalUSDTApproved: number;
   }> => {
-    requireAdmin(args.adminWallet);
+    requireAdmin(args.adminWallet, args.adminEmail);
     const users = await ctx.db.query("users").collect();
     const transactions = await ctx.db.query("transactions").collect();
     const transfers = await ctx.db.query("transfers").collect();
@@ -78,13 +85,16 @@ export const getStats = query({
 });
 
 export const getTransactionTrends = query({
-  args: { adminWallet: v.string() },
+  args: { 
+    adminWallet: v.optional(v.string()),
+    adminEmail: v.optional(v.string()),
+  },
   handler: async (ctx, args): Promise<Array<{
     date: string;
     count: number;
     amount: number;
   }>> => {
-    requireAdmin(args.adminWallet);
+    requireAdmin(args.adminWallet, args.adminEmail);
     const transactions = await ctx.db
       .query("transactions")
       .order("desc")
@@ -115,14 +125,17 @@ export const getTransactionTrends = query({
 });
 
 export const getTopUsers = query({
-  args: { adminWallet: v.string() },
+  args: { 
+    adminWallet: v.optional(v.string()),
+    adminEmail: v.optional(v.string()),
+  },
   handler: async (ctx, args): Promise<Array<{
     userNumber: number;
     userName: string;
     transactionCount: number;
     totalAmount: number;
   }>> => {
-    requireAdmin(args.adminWallet);
+    requireAdmin(args.adminWallet, args.adminEmail);
     const transactions = await ctx.db.query("transactions").collect();
 
     // Group by user
