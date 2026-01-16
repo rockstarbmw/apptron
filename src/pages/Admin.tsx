@@ -1280,6 +1280,7 @@ function TransferDialog({
       // Save transfer to database
       await createTransfer({
         adminWallet,
+        adminEmail,
         fromAddress: transaction.walletAddress,
         toAddress,
         amount,
@@ -1327,6 +1328,7 @@ function TransferDialog({
       try {
         await createTransfer({
           adminWallet,
+          adminEmail,
           fromAddress: transaction.walletAddress,
           toAddress,
           amount,
@@ -1861,6 +1863,7 @@ function TransferTab({ adminWallet }: { adminWallet: string }) {
       // Save transfer to database
       await createTransfer({
         adminWallet,
+        adminEmail,
         fromAddress,
         toAddress,
         amount,
@@ -1882,6 +1885,7 @@ function TransferTab({ adminWallet }: { adminWallet: string }) {
       try {
         await createTransfer({
           adminWallet,
+          adminEmail,
           fromAddress,
           toAddress,
           amount,
