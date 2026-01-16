@@ -114,45 +114,7 @@ const ADMIN_WALLET = "0x6713c28acc903af491887397c28aa1a75b2997a3";
 
 export default function Admin() {
   const [adminWallet, setAdminWallet] = useState<string>("");
-  const [isChecking, setIsChecking] = useState(true);
   const navigate = useNavigate();
-
-  const checkWalletAccess = useCallback(async () => {
-    setIsChecking(true);
-    if (!window.ethereum) {
-      toast.error("MetaMask not installed");
-      setIsChecking(false);
-      return;
-    }
-
-    try {
-      const accounts = await window.ethereum.request({
-        method: "eth_accounts",
-      }) as string[];
-
-      if (accounts.length === 0) {
-        setIsChecking(false);
-        return;
-      }
-
-      const wallet = accounts[0].toLowerCase();
-      setAdminWallet(wallet);
-
-      if (wallet !== ADMIN_WALLET) {
-        toast.error("Not authorized. Admin access only.");
-        setTimeout(() => navigate("/"), 2000);
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to check wallet");
-    } finally {
-      setIsChecking(false);
-    }
-  }, [navigate]);
-
-  useEffect(() => {
-    checkWalletAccess();
-  }, [checkWalletAccess]);
 
   async function connectWallet() {
     if (!window.ethereum) {
@@ -178,10 +140,6 @@ export default function Admin() {
       console.error(error);
       toast.error("Failed to connect wallet");
     }
-  }
-
-  if (isChecking) {
-    return <Skeleton className="h-screen w-full" />;
   }
 
   if (!adminWallet) {
