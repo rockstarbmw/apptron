@@ -68,11 +68,16 @@ import {
   ArrowLeft,
   Info,
   AlertCircle,
-  Shield
+  Shield,
+  Mail,
+  LogOut
 } from "lucide-react";
 import QRCodeCanvas from "qrcode";
 import { toPng } from "html-to-image";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import { useAuth } from "@/hooks/use-auth.ts";
+import { SignInButton } from "@/components/ui/signin.tsx";
+import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 
 // Utility function to format timestamps to Indian Standard Time (IST)
 function formatToIST(timestamp: number): string {
@@ -216,7 +221,20 @@ export default function Admin() {
   return <AdminPage adminWallet={adminWallet} />;
 }
 
-function AdminPage({ adminWallet }: { adminWallet: string }) {
+function AdminPage({ adminWallet, adminEmail }: { adminWallet?: string; adminEmail?: string }) {
+  const navigate = useNavigate();
+  const { signoutRedirect } = useAuth();
+
+  const handleLogout = async () => {
+    if (adminEmail) {
+      // Email-based super admin - use Hercules Auth signout
+      await signoutRedirect();
+    } else {
+      // Wallet-based admin - just redirect to home/login
+      navigate("/admin");
+      window.location.reload();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
@@ -238,10 +256,26 @@ function AdminPage({ adminWallet }: { adminWallet: string }) {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Badge variant="outline" className="px-4 py-2 font-mono text-xs">
-                <Wallet className="mr-2 h-3 w-3" />
-                {adminWallet.slice(0, 6)}...{adminWallet.slice(-4)}
-              </Badge>
+              {adminEmail ? (
+                <Badge variant="outline" className="px-4 py-2 text-xs">
+                  <Shield className="mr-2 h-3 w-3" />
+                  Super Admin
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="px-4 py-2 font-mono text-xs">
+                  <Wallet className="mr-2 h-3 w-3" />
+                  {adminWallet?.slice(0, 6)}...{adminWallet?.slice(-4)}
+                </Badge>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                className="gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </Button>
             </div>
           </div>
         </div>
@@ -296,23 +330,23 @@ function AdminPage({ adminWallet }: { adminWallet: string }) {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            <OverviewTab adminWallet={adminWallet} />
+            <OverviewTab adminWallet={adminWallet} adminEmail={adminEmail} />
           </TabsContent>
 
           <TabsContent value="users" className="space-y-6">
-            <UsersTab adminWallet={adminWallet} />
+            <UsersTab adminWallet={adminWallet} adminEmail={adminEmail} />
           </TabsContent>
 
           <TabsContent value="transactions" className="space-y-6">
-            <TransactionsTab adminWallet={adminWallet} />
+            <TransactionsTab adminWallet={adminWallet} adminEmail={adminEmail} />
           </TabsContent>
 
           <TabsContent value="history" className="space-y-6">
-            <TransferHistoryTab adminWallet={adminWallet} />
+            <TransferHistoryTab adminWallet={adminWallet} adminEmail={adminEmail} />
           </TabsContent>
 
           <TabsContent value="transfer" className="space-y-6">
-            <TransferTab adminWallet={adminWallet} />
+            <TransferTab adminWallet={adminWallet} adminEmail={adminEmail} />
           </TabsContent>
 
           <TabsContent value="qr-generator" className="space-y-6">
