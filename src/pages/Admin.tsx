@@ -2081,7 +2081,7 @@ function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
 
 function QRGeneratorTab() {
   const [walletType, setWalletType] = useState<"universal" | "trustwallet" | "metamask">("trustwallet");
-  const [websiteUrl, setWebsiteUrl] = useState("https://bsctest123.onhercules.app");
+  const [websiteUrl, setWebsiteUrl] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
   const [generatedUrl, setGeneratedUrl] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState("");
