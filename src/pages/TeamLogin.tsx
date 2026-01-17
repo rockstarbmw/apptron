@@ -4,8 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
 import { UserCog, LogIn } from "lucide-react";
 import { toast } from "sonner";
 
@@ -15,7 +13,6 @@ export default function TeamLogin() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // We'll verify login when user clicks submit
   const handleLogin = async () => {
     if (!username || !password) {
       toast.error("Please enter username and password");
@@ -25,7 +22,6 @@ export default function TeamLogin() {
     setIsLoading(true);
 
     try {
-      // Call verification query
       const result = await fetch(`${import.meta.env.VITE_CONVEX_URL}/api/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -37,7 +33,6 @@ export default function TeamLogin() {
       }).then((res) => res.json());
 
       if (result.value.success) {
-        // Store session in localStorage
         localStorage.setItem("teamMemberSession", JSON.stringify({
           userId: result.value.userId,
           username: username,

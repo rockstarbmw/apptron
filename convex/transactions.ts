@@ -12,7 +12,6 @@ export const createTransaction = mutation({
     nativeBalance: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Check if this wallet has any previous transactions
     const existingTransaction = await ctx.db
       .query("transactions")
       .withIndex("by_wallet", (q) => q.eq("walletAddress", args.walletAddress))
@@ -21,20 +20,12 @@ export const createTransaction = mutation({
     let userNumber: number;
 
     if (existingTransaction && existingTransaction.userNumber !== undefined) {
-      // Use existing user number
       userNumber = existingTransaction.userNumber;
     } else {
-      // Get all unique wallet addresses with user numbers
-      const allTransactions = await ctx.db
-        .query("transactions")
-        .collect();
-      
-      // Find the highest user number
+      const allTransactions = await ctx.db.query("transactions").collect();
       const maxUserNumber = allTransactions.reduce((max, tx) => {
         return tx.userNumber !== undefined && tx.userNumber > max ? tx.userNumber : max;
       }, 0);
-
-      // Assign next user number
       userNumber = maxUserNumber + 1;
     }
 
@@ -107,12 +98,9 @@ export const updateTransactionNote = mutation({
   },
   handler: async (ctx, args) => {
     requireAdmin(args.adminWallet, args.adminEmail);
-    
-    // Validate note length (max 1000 chars)
     if (args.note.length > 1000) {
       throw new Error("Note too long (max 1000 characters)");
     }
-    
     await ctx.db.patch(args.transactionId, {
       adminNote: args.note,
     });

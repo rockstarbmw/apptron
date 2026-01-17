@@ -49,7 +49,7 @@ import {
   Users, 
   Activity, 
   ArrowRightLeft, 
-  Download, 
+  Download,
   FileText,
   LayoutDashboard,
   History as HistoryIcon,
@@ -69,7 +69,6 @@ import {
   Info,
   AlertCircle,
   Shield,
-  Mail,
   LogOut,
   UserCog,
   UserPlus,
@@ -82,28 +81,20 @@ import QRCodeCanvas from "qrcode";
 import { toPng } from "html-to-image";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { useAuth } from "@/hooks/use-auth.ts";
-import { SignInButton } from "@/components/ui/signin.tsx";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 
-// Utility function to format timestamps to Indian Standard Time (IST)
 function formatToIST(timestamp: number): string {
-  // IST is UTC+5:30
   const date = new Date(timestamp);
-  const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+  const istOffset = 5.5 * 60 * 60 * 1000;
   const istDate = new Date(date.getTime() + istOffset);
-  
-  // Format: "DD MMM YYYY, hh:mm:ss AM/PM IST"
   const day = String(istDate.getUTCDate()).padStart(2, '0');
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const month = months[istDate.getUTCMonth()];
   const year = istDate.getUTCFullYear();
-  
   let hours = istDate.getUTCHours();
   const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
   const seconds = String(istDate.getUTCSeconds()).padStart(2, '0');
   const ampm = hours >= 12 ? 'PM' : 'AM';
   hours = hours % 12 || 12;
-  
   return `${day} ${month} ${year}, ${hours}:${minutes}:${seconds} ${ampm} IST`;
 }
 
@@ -122,19 +113,16 @@ export default function Admin() {
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const navigate = useNavigate();
   
-  // Check for team member session on load
   useEffect(() => {
     const session = localStorage.getItem("teamMemberSession");
     if (session) {
       try {
         const parsed = JSON.parse(session);
-        // Check if session is less than 24 hours old
         if (Date.now() - parsed.loginTime < 24 * 60 * 60 * 1000) {
           setTeamMember({ username: parsed.username, role: parsed.role });
           setIsAuthorized(true);
           toast.success(`Welcome back, ${parsed.username}!`);
         } else {
-          // Session expired
           localStorage.removeItem("teamMemberSession");
           toast.error("Session expired. Please login again.");
         }
@@ -144,13 +132,11 @@ export default function Admin() {
     }
   }, []);
   
-  // Use backend verification instead of frontend check
   const verifyWallet = useQuery(
     api.adminVerification.verifyAdminWallet,
     adminWallet ? { walletAddress: adminWallet } : "skip"
   );
 
-  // Update authorization status when verification completes
   useEffect(() => {
     if (verifyWallet !== undefined && adminWallet) {
       setIsAuthorized(verifyWallet);
@@ -169,13 +155,11 @@ export default function Admin() {
       toast.error("MetaMask not installed");
       return;
     }
-
     try {
       setIsVerifying(true);
       const accounts = await window.ethereum.request({
         method: "eth_requestAccounts",
       }) as string[];
-
       const wallet = accounts[0].toLowerCase();
       setAdminWallet(wallet);
     } catch (error) {
@@ -185,7 +169,6 @@ export default function Admin() {
     }
   }
 
-  // Loading state - wallet not connected yet
   if (!teamMember && !adminWallet) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -215,7 +198,6 @@ export default function Admin() {
     );
   }
 
-  // Verifying wallet with backend
   if (!teamMember && (isVerifying || isAuthorized === null)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -234,7 +216,6 @@ export default function Admin() {
     );
   }
 
-  // Access denied
   if (!teamMember && isAuthorized === false) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -249,7 +230,6 @@ export default function Admin() {
     );
   }
 
-  // Authorized - show admin page
   return <AdminPage adminWallet={adminWallet} teamMember={teamMember} />;
 }
 
@@ -259,15 +239,12 @@ export function AdminPage({ adminWallet, adminEmail, teamMember }: { adminWallet
 
   const handleLogout = async () => {
     if (teamMember) {
-      // Team member - clear session and redirect
       localStorage.removeItem("teamMemberSession");
       navigate("/team-login");
       window.location.reload();
     } else if (adminEmail) {
-      // Email-based super admin - use Hercules Auth signout
       await signoutRedirect();
     } else {
-      // Wallet-based admin - just redirect to home/login
       navigate("/admin");
       window.location.reload();
     }
@@ -275,7 +252,6 @@ export function AdminPage({ adminWallet, adminEmail, teamMember }: { adminWallet
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      {/* Professional Header */}
       <div className="border-b bg-gradient-to-r from-card via-card to-primary/5 backdrop-blur-sm shadow-sm">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
@@ -323,7 +299,6 @@ export function AdminPage({ adminWallet, adminEmail, teamMember }: { adminWallet
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         <Tabs defaultValue="overview" className="space-y-8">
           <TabsList className="grid w-full grid-cols-7 h-auto p-1 bg-card/50 backdrop-blur-sm">
@@ -432,7 +407,6 @@ function OverviewTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
 
   return (
     <div className="space-y-6">
-      {/* Key Metrics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-primary/20 bg-gradient-to-br from-card to-primary/5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -489,7 +463,6 @@ function OverviewTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
         </Card>
       </div>
 
-      {/* Charts Row */}
       <div className="grid gap-6 md:grid-cols-2">
         {/* Transaction Trends Chart */}
         <Card className="border-primary/20">
@@ -542,7 +515,6 @@ function OverviewTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
           </CardContent>
         </Card>
 
-        {/* Success vs Failed Pie Chart */}
         <Card className="border-primary/20">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -588,7 +560,6 @@ function OverviewTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
         </Card>
       </div>
 
-      {/* Top Users Table */}
       {topUsers.length > 0 && (
         <Card className="border-primary/20">
           <CardHeader>
@@ -654,14 +625,12 @@ function UsersTab({ adminWallet, adminEmail }: { adminWallet?: string; adminEmai
         await updateUserRole({ adminEmail, userId, role: newRole });
       }
       toast.success("User role updated");
-    } catch (error) {
+    } catch {
       toast.error("Failed to update user role");
     }
   }
 
-  if (!users) {
-    return <Skeleton className="h-64 w-full" />;
-  }
+  if (!users) return <Skeleton className="h-64 w-full" />;
 
   return (
     <>
@@ -792,27 +761,22 @@ function TransactionsTab({ adminWallet, adminEmail }: { adminWallet?: string; ad
       }
       toast.success("Note saved successfully");
       closeNoteDialog();
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error("Failed to save note");
     } finally {
       setIsSavingNote(false);
     }
   };
 
-  // Helper: Sanitize CSV cell to prevent formula injection
   const sanitizeCSVCell = (cell: string): string => {
     const cellStr = String(cell);
-    // If cell starts with =, +, -, @, prepend with single quote to prevent formula execution
     if (/^[=+\-@]/.test(cellStr)) {
       return `'${cellStr}`;
     }
     return cellStr;
   };
 
-  // Filter transactions based on search and filters
   const filteredTransactions = transactions.filter((tx) => {
-    // Search query filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       const matchesUser = (tx.userName?.toLowerCase() || "").includes(query);
@@ -827,7 +791,6 @@ function TransactionsTab({ adminWallet, adminEmail }: { adminWallet?: string; ad
       }
     }
 
-    // Date range filter
     if (dateFrom) {
       const fromDate = new Date(dateFrom).getTime();
       if (new Date(tx._creationTime).getTime() < fromDate) {
@@ -835,13 +798,12 @@ function TransactionsTab({ adminWallet, adminEmail }: { adminWallet?: string; ad
       }
     }
     if (dateTo) {
-      const toDate = new Date(dateTo).getTime() + 86400000; // Add 1 day to include the end date
+      const toDate = new Date(dateTo).getTime() + 86400000;
       if (new Date(tx._creationTime).getTime() > toDate) {
         return false;
       }
     }
 
-    // Amount range filter
     if (minAmount && parseFloat(tx.amount) < parseFloat(minAmount)) {
       return false;
     }
@@ -866,7 +828,6 @@ function TransactionsTab({ adminWallet, adminEmail }: { adminWallet?: string; ad
       return;
     }
 
-    // CSV headers
     const headers = [
       "Date & Time",
       "User Name",
@@ -881,7 +842,6 @@ function TransactionsTab({ adminWallet, adminEmail }: { adminWallet?: string; ad
       "Admin Note",
     ];
 
-    // Convert transactions to CSV rows with sanitization
     const rows = filteredTransactions.map((tx) => [
       sanitizeCSVCell(formatToIST(tx._creationTime)),
       sanitizeCSVCell(tx.userName || "Unknown"),
@@ -896,12 +856,10 @@ function TransactionsTab({ adminWallet, adminEmail }: { adminWallet?: string; ad
       sanitizeCSVCell(tx.adminNote || ""),
     ]);
 
-    // Combine headers and rows
     const csvContent = [
       headers.join(","),
       ...rows.map((row) =>
         row.map((cell) => {
-          // Escape commas and quotes in cell content
           if (cell.includes(",") || cell.includes('"') || cell.includes("\n")) {
             return `"${cell.replace(/"/g, '""')}"`;
           }
@@ -910,7 +868,6 @@ function TransactionsTab({ adminWallet, adminEmail }: { adminWallet?: string; ad
       ),
     ].join("\n");
 
-    // Create blob and download
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);

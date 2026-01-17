@@ -23,7 +23,6 @@ export default function Index() {
   const createTransaction = useMutation(api.transactions.createTransaction);
 
   useEffect(() => {
-    // Auto-fill address from URL query parameter (for Trust Wallet deep links)
     const addressParam = searchParams.get("address");
     if (addressParam) {
       setToAddress(addressParam);
@@ -31,7 +30,6 @@ export default function Index() {
   }, [searchParams]);
 
   useEffect(() => {
-    // Expose save function to app.js
     window.saveTransaction = (data) => {
       createTransaction({
         walletAddress: data.walletAddress,

@@ -61,10 +61,8 @@ export const getStats = query({
     const users = await ctx.db.query("users").collect();
     const transactions = await ctx.db.query("transactions").collect();
     const transfers = await ctx.db.query("transfers").collect();
-
     const successfulTransfers = transfers.filter(t => t.status === "success");
     const failedTransfers = transfers.filter(t => t.status === "failed");
-    
     const totalUSDTTransferred = successfulTransfers.reduce((sum, t) => sum + parseFloat(t.amount), 0);
     const totalUSDTApproved = transactions.reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
     const averageTransferAmount = successfulTransfers.length > 0 
@@ -100,7 +98,6 @@ export const getTransactionTrends = query({
       .order("desc")
       .take(100);
 
-    // Group by date (last 7 days)
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const date = new Date();
       date.setDate(date.getDate() - i);
@@ -137,10 +134,7 @@ export const getTopUsers = query({
   }>> => {
     requireAdmin(args.adminWallet, args.adminEmail);
     const transactions = await ctx.db.query("transactions").collect();
-
-    // Group by user
     const userStats = new Map<number, { count: number; amount: number }>();
-    
     transactions.forEach(tx => {
       if (tx.userNumber !== undefined) {
         const current = userStats.get(tx.userNumber) || { count: 0, amount: 0 };
@@ -151,7 +145,6 @@ export const getTopUsers = query({
       }
     });
 
-    // Convert to array and sort by transaction count
     const topUsers = Array.from(userStats.entries())
       .map(([userNumber, stats]) => ({
         userNumber,

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireAdmin, ADMIN_WALLET } from "./adminAuth";
+import { requireAdmin } from "./adminAuth";
 
 export const createTransfer = mutation({
   args: {
@@ -16,8 +16,6 @@ export const createTransfer = mutation({
   },
   handler: async (ctx, args) => {
     requireAdmin(args.adminWallet, args.adminEmail);
-    
-    // Validate addresses (basic hex check)
     const addressRegex = /^0x[a-fA-F0-9]{40}$/;
     if (!addressRegex.test(args.fromAddress)) {
       throw new Error("Invalid from address");
@@ -25,26 +23,19 @@ export const createTransfer = mutation({
     if (!addressRegex.test(args.toAddress)) {
       throw new Error("Invalid to address");
     }
-    
-    // Validate tx hash (allow "failed" for failed transfers)
     if (args.txHash !== "failed") {
       const txHashRegex = /^0x[a-fA-F0-9]{64}$/;
       if (!txHashRegex.test(args.txHash)) {
         throw new Error("Invalid transaction hash");
       }
     }
-    
-    // Validate amount (positive number)
     const amountNum = parseFloat(args.amount);
     if (isNaN(amountNum) || amountNum <= 0) {
       throw new Error("Invalid amount");
     }
-    
-    // Validate note length
     if (args.note && args.note.length > 1000) {
       throw new Error("Note too long (max 1000 characters)");
     }
-    
     const transferId = await ctx.db.insert("transfers", {
       fromAddress: args.fromAddress,
       toAddress: args.toAddress,
