@@ -37,8 +37,8 @@ export const createAdminUser = mutation({
       throw new Error("Username already exists");
     }
 
-    // Hash password
-    const passwordHash = await bcrypt.hash(args.password, 10);
+    // Hash password using synchronous method
+    const passwordHash = bcrypt.hashSync(args.password, 10);
 
     // Create user
     const userId = await ctx.db.insert("adminUsers", {
@@ -76,8 +76,8 @@ export const changePassword = mutation({
       throw new Error("User not found");
     }
 
-    // Hash new password
-    const passwordHash = await bcrypt.hash(args.newPassword, 10);
+    // Hash new password using synchronous method
+    const passwordHash = bcrypt.hashSync(args.newPassword, 10);
 
     // Update password
     await ctx.db.patch(args.userId, { passwordHash });
@@ -174,8 +174,8 @@ export const verifyAdminUserLogin = query({
       return { success: false, message: "Account is disabled" };
     }
 
-    // Verify password
-    const isValid = await bcrypt.compare(args.password, user.passwordHash);
+    // Verify password using synchronous method
+    const isValid = bcrypt.compareSync(args.password, user.passwordHash);
 
     if (!isValid) {
       return { success: false, message: "Invalid username or password" };
