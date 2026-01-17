@@ -2156,6 +2156,9 @@ function QRGeneratorTab() {
       const dataUrl = await toPng(element, {
         quality: 1,
         pixelRatio: 2,
+        backgroundColor: "#FFFFFF",
+        width: 375,
+        height: element.offsetHeight,
       });
 
       const link = document.createElement("a");
@@ -2304,7 +2307,12 @@ function QRGeneratorTab() {
               <div 
                 id="mobile-mockup"
                 className="mx-auto bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
-                style={{ width: "375px" }}
+                style={{ 
+                  width: "375px",
+                  boxSizing: "border-box",
+                  padding: "0",
+                  margin: "0 auto"
+                }}
               >
                 {/* Status Bar */}
                 <div className="bg-white px-6 pt-3 pb-2 flex items-center justify-between text-black">
