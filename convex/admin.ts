@@ -40,6 +40,17 @@ export const updateUserRole = mutation({
   },
 });
 
+export const deleteUser = mutation({
+  args: {
+    adminWallet: v.optional(v.string()),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    requireAdmin(args.adminWallet);
+    await ctx.db.delete(args.userId);
+  },
+});
+
 export const getStats = query({
   args: { 
     adminWallet: v.optional(v.string()),

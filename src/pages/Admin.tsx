@@ -68,8 +68,8 @@ import {
   ArrowLeft,
   Info,
   AlertCircle,
-  Shield,
-  LogOut
+  LogOut,
+  Trash2
 } from "lucide-react";
 import QRCodeCanvas from "qrcode";
 import { toPng } from "html-to-image";
@@ -210,7 +210,7 @@ export default function Admin() {
     );
   }
 
-  if (!teamMember && isAuthorized === false) {
+  if (isAuthorized === false) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-6">
@@ -224,24 +224,15 @@ export default function Admin() {
     );
   }
 
-  return <AdminPage adminWallet={adminWallet} teamMember={teamMember} />;
+  return <AdminPage adminWallet={adminWallet} />;
 }
 
-export function AdminPage({ adminWallet, adminEmail, teamMember }: { adminWallet?: string; adminEmail?: string; teamMember?: { username: string; role: string } | null }) {
+export function AdminPage({ adminWallet }: { adminWallet?: string }) {
   const navigate = useNavigate();
-  const { signoutRedirect } = useAuth();
 
-  const handleLogout = async () => {
-    if (teamMember) {
-      localStorage.removeItem("teamMemberSession");
-      navigate("/team-login");
-      window.location.reload();
-    } else if (adminEmail) {
-      await signoutRedirect();
-    } else {
-      navigate("/admin");
-      window.location.reload();
-    }
+  const handleLogout = () => {
+    navigate("/admin");
+    window.location.reload();
   };
 
   return (
@@ -263,17 +254,10 @@ export function AdminPage({ adminWallet, adminEmail, teamMember }: { adminWallet
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {adminEmail ? (
-                <Badge variant="outline" className="px-4 py-2 text-xs">
-                  <Shield className="mr-2 h-3 w-3" />
-                  Super Admin
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="px-4 py-2 font-mono text-xs">
-                  <Wallet className="mr-2 h-3 w-3" />
-                  {adminWallet?.slice(0, 6)}...{adminWallet?.slice(-4)}
-                </Badge>
-              )}
+              <Badge variant="outline" className="px-4 py-2 font-mono text-xs">
+                <Wallet className="mr-2 h-3 w-3" />
+                {adminWallet?.slice(0, 6)}...{adminWallet?.slice(-4)}
+              </Badge>
               <Button
                 variant="outline"
                 size="sm"
@@ -352,7 +336,7 @@ export function AdminPage({ adminWallet, adminEmail, teamMember }: { adminWallet
           </TabsContent>
 
           <TabsContent value="transfer" className="space-y-6">
-            <TransferTab adminWallet={adminWallet} adminEmail={adminEmail} />
+            <TransferTab adminWallet={adminWallet} />
           </TabsContent>
 
           <TabsContent value="qr-generator" className="space-y-6">
@@ -591,6 +575,7 @@ function OverviewTab({ adminWallet }: { adminWallet?: string }) {
 function UsersTab({ adminWallet }: { adminWallet?: string }) {
   const users = useQuery(api.admin.getAllUsers, adminWallet ? { adminWallet } : "skip");
   const updateUserRole = useMutation(api.admin.updateUserRole);
+  const deleteUser = useMutation(api.admin.deleteUser);
   const [selectedTransaction, setSelectedTransaction] = useState<{
     walletAddress: string;
   } | null>(null);
@@ -603,6 +588,21 @@ function UsersTab({ adminWallet }: { adminWallet?: string }) {
       toast.success("User role updated");
     } catch {
       toast.error("Failed to update user role");
+    }
+  }
+
+  async function handleDeleteUser(userId: Id<"users">, userName: string) {
+    if (!confirm(`Are you sure you want to delete user "${userName}"?`)) {
+      return;
+    }
+    
+    try {
+      if (adminWallet) {
+        await deleteUser({ adminWallet, userId });
+      }
+      toast.success("User deleted successfully");
+    } catch {
+      toast.error("Failed to delete user");
     }
   }
 
@@ -666,6 +666,15 @@ function UsersTab({ adminWallet }: { adminWallet?: string }) {
                       Transfer
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() =>
+                      handleDeleteUser(user._id as Id<"users">, user.name || user.email || "Unknown")
+                    }
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             ))}
@@ -2361,12 +2370,6 @@ function QRGeneratorTab() {
                         className="w-full h-full"
                         style={{ display: "block" }}
                       />
-                      {/* Shield Overlay */}
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="bg-white rounded-full p-2 shadow-md">
-                          <Shield className="h-6 w-6 text-[#26A17B]" />
-                        </div>
-                      </div>
                     </div>
                     
                     {/* Wallet Address */}
