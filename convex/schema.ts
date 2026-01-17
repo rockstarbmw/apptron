@@ -45,4 +45,12 @@ export default defineSchema({
     .index("by_from_address", ["fromAddress"])
     .index("by_to_address", ["toAddress"])
     .index("by_transferred_by", ["transferredBy"]),
+
+  adminUsers: defineTable({
+    username: v.string(),
+    passwordHash: v.string(),
+    role: v.union(v.literal("full-access"), v.literal("view-only")),
+    createdBy: v.string(), // Email or wallet of creator
+    isActive: v.boolean(),
+  }).index("by_username", ["username"]),
 });
