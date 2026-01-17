@@ -2306,16 +2306,16 @@ function QRGeneratorTab() {
               {/* Mobile Mockup Container */}
               <div 
                 id="mobile-mockup"
-                className="mx-auto bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+                className="bg-white rounded-[2.5rem] shadow-2xl"
                 style={{ 
                   width: "375px",
-                  boxSizing: "border-box",
-                  padding: "0",
-                  margin: "0 auto"
+                  maxWidth: "375px",
+                  margin: "0 auto",
+                  overflow: "hidden"
                 }}
               >
                 {/* Status Bar */}
-                <div className="bg-white px-6 pt-3 pb-2 flex items-center justify-between text-black">
+                <div className="bg-white pt-3 pb-2 flex items-center justify-between text-black" style={{ paddingLeft: "24px", paddingRight: "24px" }}>
                   <span className="text-sm font-semibold">16:35</span>
                   <div className="flex items-center gap-1">
                     <div className="flex gap-[2px]">
@@ -2334,19 +2334,19 @@ function QRGeneratorTab() {
                 </div>
 
                 {/* Header */}
-                <div className="bg-white px-5 py-4 flex items-center justify-between border-b border-gray-200">
-                  <button className="p-2 -ml-2">
+                <div className="bg-white py-4 flex items-center justify-center border-b border-gray-200" style={{ paddingLeft: "20px", paddingRight: "20px", position: "relative" }}>
+                  <div style={{ position: "absolute", left: "20px" }}>
                     <ArrowLeft className="h-5 w-5 text-black" />
-                  </button>
+                  </div>
                   <h1 className="text-lg font-semibold text-black">Receive</h1>
-                  <button className="p-2 -mr-2">
+                  <div style={{ position: "absolute", right: "20px" }}>
                     <Info className="h-5 w-5 text-black" />
-                  </button>
+                  </div>
                 </div>
 
-                {/* Warning Banner - Centered */}
-                <div className="mt-3 flex justify-center">
-                  <div className="bg-[#FFF4E5] border-l-4 border-[#FFB020] px-3 py-2 rounded-lg" style={{ width: "320px" }}>
+                {/* Warning Banner */}
+                <div className="bg-white" style={{ paddingTop: "16px", paddingLeft: "28px", paddingRight: "28px" }}>
+                  <div className="bg-[#FFF4E5] border-l-4 border-[#FFB020] px-3 py-2 rounded-lg">
                     <div className="flex gap-2">
                       <AlertCircle className="h-4 w-4 text-[#FFB020] flex-shrink-0 mt-0.5" />
                       <p className="text-[10px] leading-relaxed text-black">
@@ -2356,8 +2356,8 @@ function QRGeneratorTab() {
                   </div>
                 </div>
 
-                {/* USDT Badge - Centered */}
-                <div className="pt-4 pb-2 flex justify-center">
+                {/* USDT Badge */}
+                <div className="bg-white pt-4 pb-2 flex justify-center">
                   <div className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-3 py-1.5">
                     <div className="w-6 h-6 rounded-full bg-[#26A17B] flex items-center justify-center text-white font-bold" style={{ fontSize: "14px" }}>
                       ₮
@@ -2369,14 +2369,15 @@ function QRGeneratorTab() {
                   </div>
                 </div>
 
-                {/* QR Code Container - Centered */}
-                <div className="pb-3 flex justify-center">
+                {/* QR Code Container */}
+                <div className="bg-white pb-3 flex justify-center">
                   <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-200 inline-flex flex-col items-center">
                     <div className="relative" style={{ width: "180px", height: "180px" }}>
                       <img 
                         src={qrDataUrl} 
                         alt="QR Code" 
                         className="w-full h-full"
+                        style={{ display: "block" }}
                       />
                       {/* Shield Overlay */}
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -2386,7 +2387,7 @@ function QRGeneratorTab() {
                       </div>
                     </div>
                     
-                    {/* Wallet Address - directly below QR */}
+                    {/* Wallet Address */}
                     <div className="mt-2" style={{ width: "180px" }}>
                       <p className="text-center font-mono text-[11px] text-black break-all leading-snug">
                         {walletAddress || "0x18CcB55B75556DfD959DbBc57c9307dce041A7a3"}
@@ -2395,37 +2396,37 @@ function QRGeneratorTab() {
                   </div>
                 </div>
 
-                {/* Action Buttons - Centered */}
-                <div className="pb-4 flex justify-center">
-                  <div className="flex items-center justify-around" style={{ width: "280px" }}>
-                    <button className="flex flex-col items-center gap-1.5 p-2">
+                {/* Action Buttons */}
+                <div className="bg-white pb-4 flex justify-center" style={{ paddingLeft: "48px", paddingRight: "48px" }}>
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex flex-col items-center gap-1.5">
                       <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
                         <Copy className="h-4 w-4 text-gray-700" />
                       </div>
                       <span className="text-[10px] text-black font-medium">Copy</span>
-                    </button>
-                    <button className="flex flex-col items-center gap-1.5 p-2">
+                    </div>
+                    <div className="flex flex-col items-center gap-1.5">
                       <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
                         <Download className="h-4 w-4 text-gray-700" />
                       </div>
                       <span className="text-[10px] text-black font-medium">Set Amount</span>
-                    </button>
-                    <button className="flex flex-col items-center gap-1.5 p-2">
+                    </div>
+                    <div className="flex flex-col items-center gap-1.5">
                       <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
                         <ExternalLink className="h-4 w-4 text-gray-700" />
                       </div>
                       <span className="text-[10px] text-black font-medium">Share</span>
-                    </button>
+                    </div>
                   </div>
                 </div>
 
-                {/* Deposit Info Card - Centered */}
-                <div className="pb-4 flex justify-center">
-                  <div className="bg-[#F5F5F5] rounded-2xl p-3 flex items-center gap-2.5" style={{ width: "320px" }}>
+                {/* Deposit Info Card */}
+                <div className="bg-white pb-4" style={{ paddingLeft: "28px", paddingRight: "28px" }}>
+                  <div className="bg-[#F5F5F5] rounded-2xl p-3 flex items-center gap-2.5">
                     <div className="w-9 h-9 rounded-full bg-[#E5E5FF] flex items-center justify-center flex-shrink-0">
                       <Download className="h-4 w-4 text-[#6B5CE7]" />
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <p className="text-xs font-semibold text-black">Deposit from exchange</p>
                       <p className="text-[10px] text-gray-600 mt-0.5">By direct transfer from your account</p>
                     </div>
