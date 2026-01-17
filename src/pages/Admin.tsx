@@ -69,13 +69,7 @@ import {
   Info,
   AlertCircle,
   Shield,
-  LogOut,
-  UserCog,
-  UserPlus,
-  Key,
-  Trash2,
-  ToggleLeft,
-  ToggleRight
+  LogOut
 } from "lucide-react";
 import QRCodeCanvas from "qrcode";
 import { toPng } from "html-to-image";
@@ -269,12 +263,7 @@ export function AdminPage({ adminWallet, adminEmail, teamMember }: { adminWallet
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {teamMember ? (
-                <Badge variant="outline" className="px-4 py-2 text-xs">
-                  <UserCog className="mr-2 h-3 w-3" />
-                  {teamMember.username} ({teamMember.role})
-                </Badge>
-              ) : adminEmail ? (
+              {adminEmail ? (
                 <Badge variant="outline" className="px-4 py-2 text-xs">
                   <Shield className="mr-2 h-3 w-3" />
                   Super Admin
@@ -301,7 +290,7 @@ export function AdminPage({ adminWallet, adminEmail, teamMember }: { adminWallet
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         <Tabs defaultValue="overview" className="space-y-8">
-          <TabsList className="grid w-full grid-cols-7 h-auto p-1 bg-card/50 backdrop-blur-sm">
+          <TabsList className="grid w-full grid-cols-6 h-auto p-1 bg-card/50 backdrop-blur-sm">
             <TabsTrigger 
               value="overview" 
               className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -344,13 +333,6 @@ export function AdminPage({ adminWallet, adminEmail, teamMember }: { adminWallet
               <QrCode className="h-4 w-4" />
               <span className="hidden sm:inline">QR Generator</span>
             </TabsTrigger>
-            <TabsTrigger 
-              value="team"
-              className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-            >
-              <UserCog className="h-4 w-4" />
-              <span className="hidden sm:inline">Team</span>
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -375,10 +357,6 @@ export function AdminPage({ adminWallet, adminEmail, teamMember }: { adminWallet
 
           <TabsContent value="qr-generator" className="space-y-6">
             <QRGeneratorTab />
-          </TabsContent>
-
-          <TabsContent value="team" className="space-y-6">
-            <UserManagementTab adminWallet={adminWallet} adminEmail={adminEmail} />
           </TabsContent>
         </Tabs>
       </div>
@@ -2476,323 +2454,6 @@ function QRGeneratorTab() {
           )}
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function UserManagementTab({ adminWallet, adminEmail }: { adminWallet?: string; adminEmail?: string }) {
-  const adminUsers = useQuery(api.adminUsers.listAdminUsers, adminWallet ? { adminWallet } : adminEmail ? { adminEmail } : "skip");
-  const createUser = useMutation(api.adminUsers.createAdminUser);
-  const changePassword = useMutation(api.adminUsers.changePassword);
-  const deleteUser = useMutation(api.adminUsers.deleteAdminUser);
-  const toggleStatus = useMutation(api.adminUsers.toggleUserStatus);
-
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<{ id: string; username: string } | null>(null);
-
-  // Create user form state
-  const [newUsername, setNewUsername] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [newRole, setNewRole] = useState<"full-access" | "view-only">("full-access");
-
-  // Change password state
-  const [changePasswordValue, setChangePasswordValue] = useState("");
-
-  const handleCreateUser = async () => {
-    if (!newUsername || !newPassword) {
-      toast.error("Please fill all fields");
-      return;
-    }
-
-    try {
-      await createUser({
-        username: newUsername,
-        password: newPassword,
-        role: newRole,
-        adminWallet,
-        adminEmail,
-      });
-      toast.success(`User "${newUsername}" created successfully`);
-      setShowCreateForm(false);
-      setNewUsername("");
-      setNewPassword("");
-      setNewRole("full-access");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to create user";
-      toast.error(errorMessage);
-    }
-  };
-
-  const handleChangePassword = async () => {
-    if (!selectedUser || !changePasswordValue) {
-      toast.error("Please enter new password");
-      return;
-    }
-
-    try {
-      await changePassword({
-        userId: selectedUser.id as Id<"adminUsers">,
-        newPassword: changePasswordValue,
-        adminWallet,
-        adminEmail,
-      });
-      toast.success(`Password changed for "${selectedUser.username}"`);
-      setShowPasswordDialog(false);
-      setSelectedUser(null);
-      setChangePasswordValue("");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to change password";
-      toast.error(errorMessage);
-    }
-  };
-
-  const handleDeleteUser = async (userId: string, username: string) => {
-    if (!confirm(`Are you sure you want to delete user "${username}"?`)) {
-      return;
-    }
-
-    try {
-      await deleteUser({
-        userId: userId as Id<"adminUsers">,
-        adminWallet,
-        adminEmail,
-      });
-      toast.success(`User "${username}" deleted`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete user";
-      toast.error(errorMessage);
-    }
-  };
-
-  const handleToggleStatus = async (userId: string, username: string) => {
-    try {
-      await toggleStatus({
-        userId: userId as Id<"adminUsers">,
-        adminWallet,
-        adminEmail,
-      });
-      toast.success(`Status toggled for "${username}"`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to toggle status";
-      toast.error(errorMessage);
-    }
-  };
-
-  if (!adminUsers) {
-    return (
-      <div className="space-y-4">
-        {[1, 2, 3].map((i) => (
-          <Card key={i}>
-            <CardContent className="p-6">
-              <Skeleton className="h-24 w-full" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Header with Create Button */}
-      <Card className="border-primary/20 shadow-lg">
-        <CardHeader className="bg-gradient-to-br from-primary/10 to-primary/5 border-b">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <UserCog className="h-5 w-5" />
-                Team Members
-              </CardTitle>
-              <CardDescription className="mt-1">
-                Manage admin panel team members
-              </CardDescription>
-            </div>
-            <Button onClick={() => setShowCreateForm(!showCreateForm)} className="gap-2">
-              <UserPlus className="h-4 w-4" />
-              {showCreateForm ? "Cancel" : "Add Member"}
-            </Button>
-          </div>
-        </CardHeader>
-
-        {/* Create User Form */}
-        {showCreateForm && (
-          <CardContent className="p-6 border-b bg-muted/30">
-            <div className="space-y-4">
-              <div className="grid md:grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="username">Username</Label>
-                  <Input
-                    id="username"
-                    placeholder="johndoe"
-                    value={newUsername}
-                    onChange={(e) => setNewUsername(e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="role">Role</Label>
-                  <Select value={newRole} onValueChange={(value) => setNewRole(value as "full-access" | "view-only")}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="full-access">Full Access</SelectItem>
-                      <SelectItem value="view-only">View Only</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <Button onClick={handleCreateUser} className="gap-2">
-                <UserPlus className="h-4 w-4" />
-                Create User
-              </Button>
-            </div>
-          </CardContent>
-        )}
-      </Card>
-
-      {/* Users List */}
-      <Card className="border-primary/20 shadow-lg">
-        <CardContent className="p-6">
-          {adminUsers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-4">
-                <UserCog className="h-10 w-10 text-muted-foreground" />
-              </div>
-              <h3 className="text-lg font-semibold mb-1">No team members yet</h3>
-              <p className="text-sm text-muted-foreground">
-                Click "Add Member" to create your first team member
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {adminUsers.map((user) => (
-                <Card key={user._id} className="hover:border-primary/40 transition-all">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 flex-1">
-                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                          <UserCog className="h-6 w-6 text-primary" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-semibold">{user.username}</h4>
-                            <Badge variant={user.role === "full-access" ? "default" : "secondary"}>
-                              {user.role}
-                            </Badge>
-                            {user.isActive ? (
-                              <Badge variant="outline" className="gap-1">
-                                <ToggleRight className="h-3 w-3 text-green-600" />
-                                Active
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="gap-1">
-                                <ToggleLeft className="h-3 w-3 text-gray-400" />
-                                Inactive
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Created by {user.createdBy} • {new Date(user._creationTime).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedUser({ id: user._id, username: user.username });
-                            setShowPasswordDialog(true);
-                          }}
-                          className="gap-2"
-                        >
-                          <Key className="h-4 w-4" />
-                          Change Password
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleToggleStatus(user._id, user.username)}
-                          className="gap-2"
-                        >
-                          {user.isActive ? (
-                            <ToggleLeft className="h-4 w-4" />
-                          ) : (
-                            <ToggleRight className="h-4 w-4" />
-                          )}
-                          {user.isActive ? "Disable" : "Enable"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleDeleteUser(user._id, user.username)}
-                          className="gap-2"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Change Password Dialog */}
-      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Change Password</DialogTitle>
-            <DialogDescription>
-              Enter new password for user: <strong>{selectedUser?.username}</strong>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="new-password">New Password</Label>
-              <Input
-                id="new-password"
-                type="password"
-                placeholder="Enter new password (min 6 characters)"
-                value={changePasswordValue}
-                onChange={(e) => setChangePasswordValue(e.target.value)}
-                className="mt-1"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => {
-              setShowPasswordDialog(false);
-              setSelectedUser(null);
-              setChangePasswordValue("");
-            }}>
-              Cancel
-            </Button>
-            <Button onClick={handleChangePassword} className="gap-2">
-              <Key className="h-4 w-4" />
-              Change Password
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
