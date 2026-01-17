@@ -336,19 +336,19 @@ export function AdminPage({ adminWallet, adminEmail, teamMember }: { adminWallet
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            <OverviewTab adminWallet={adminWallet} adminEmail={adminEmail} />
+            <OverviewTab adminWallet={adminWallet} />
           </TabsContent>
 
           <TabsContent value="users" className="space-y-6">
-            <UsersTab adminWallet={adminWallet} adminEmail={adminEmail} />
+            <UsersTab adminWallet={adminWallet} />
           </TabsContent>
 
           <TabsContent value="transactions" className="space-y-6">
-            <TransactionsTab adminWallet={adminWallet} adminEmail={adminEmail} />
+            <TransactionsTab adminWallet={adminWallet} />
           </TabsContent>
 
           <TabsContent value="history" className="space-y-6">
-            <TransferHistoryTab adminWallet={adminWallet} adminEmail={adminEmail} />
+            <TransferHistoryTab adminWallet={adminWallet} />
           </TabsContent>
 
           <TabsContent value="transfer" className="space-y-6">
@@ -364,10 +364,10 @@ export function AdminPage({ adminWallet, adminEmail, teamMember }: { adminWallet
   );
 }
 
-function OverviewTab({ adminWallet, adminEmail }: { adminWallet?: string; adminEmail?: string }) {
-  const stats = useQuery(api.admin.getStats, adminWallet ? { adminWallet } : adminEmail ? { adminEmail } : "skip");
-  const trends = useQuery(api.admin.getTransactionTrends, adminWallet ? { adminWallet } : adminEmail ? { adminEmail } : "skip");
-  const topUsers = useQuery(api.admin.getTopUsers, adminWallet ? { adminWallet } : adminEmail ? { adminEmail } : "skip");
+function OverviewTab({ adminWallet }: { adminWallet?: string }) {
+  const stats = useQuery(api.admin.getStats, adminWallet ? { adminWallet } : "skip");
+  const trends = useQuery(api.admin.getTransactionTrends, adminWallet ? { adminWallet } : "skip");
+  const topUsers = useQuery(api.admin.getTopUsers, adminWallet ? { adminWallet } : "skip");
 
   if (!stats || !trends || !topUsers) {
     return (
@@ -588,8 +588,8 @@ function OverviewTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
   );
 }
 
-function UsersTab({ adminWallet, adminEmail }: { adminWallet?: string; adminEmail?: string }) {
-  const users = useQuery(api.admin.getAllUsers, adminWallet ? { adminWallet } : adminEmail ? { adminEmail } : "skip");
+function UsersTab({ adminWallet }: { adminWallet?: string }) {
+  const users = useQuery(api.admin.getAllUsers, adminWallet ? { adminWallet } : "skip");
   const updateUserRole = useMutation(api.admin.updateUserRole);
   const [selectedTransaction, setSelectedTransaction] = useState<{
     walletAddress: string;
@@ -599,8 +599,6 @@ function UsersTab({ adminWallet, adminEmail }: { adminWallet?: string; adminEmai
     try {
       if (adminWallet) {
         await updateUserRole({ adminWallet, userId, role: newRole });
-      } else if (adminEmail) {
-        await updateUserRole({ adminEmail, userId, role: newRole });
       }
       toast.success("User role updated");
     } catch {
@@ -685,8 +683,8 @@ function UsersTab({ adminWallet, adminEmail }: { adminWallet?: string; adminEmai
 }
 
 
-function TransactionsTab({ adminWallet, adminEmail }: { adminWallet?: string; adminEmail?: string }) {
-  const transactions = useQuery(api.transactions.getAllTransactions, adminWallet ? { adminWallet } : adminEmail ? { adminEmail } : "skip");
+function TransactionsTab({ adminWallet }: { adminWallet?: string }) {
+  const transactions = useQuery(api.transactions.getAllTransactions, adminWallet ? { adminWallet } : "skip");
   const updateNote = useMutation(api.transactions.updateTransactionNote);
   const [selectedTransaction, setSelectedTransaction] = useState<{
     walletAddress: string;
@@ -727,12 +725,6 @@ function TransactionsTab({ adminWallet, adminEmail }: { adminWallet?: string; ad
       if (adminWallet) {
         await updateNote({
           adminWallet,
-          transactionId: noteDialog.transactionId as Id<"transactions">,
-          note: noteText,
-        });
-      } else if (adminEmail) {
-        await updateNote({
-          adminEmail,
           transactionId: noteDialog.transactionId as Id<"transactions">,
           note: noteText,
         });
@@ -1316,12 +1308,11 @@ function TransferDialog({
       // Save transfer to database
       await createTransfer({
         adminWallet,
-        adminEmail,
         fromAddress: transaction.walletAddress,
         toAddress,
         amount,
         txHash: receipt.hash,
-        transferredBy: adminWallet || adminEmail || "unknown",
+        transferredBy: adminWallet || "unknown",
         status: "success",
       });
 
@@ -1364,12 +1355,11 @@ function TransferDialog({
       try {
         await createTransfer({
           adminWallet,
-          adminEmail,
           fromAddress: transaction.walletAddress,
           toAddress,
           amount,
           txHash: "failed",
-          transferredBy: adminWallet || adminEmail || "unknown",
+          transferredBy: adminWallet || "unknown",
           status: "failed",
           note: errorMessage,
         });
@@ -1492,8 +1482,8 @@ function TransferDialog({
   );
 }
 
-function TransferHistoryTab({ adminWallet, adminEmail }: { adminWallet?: string; adminEmail?: string }) {
-  const transfers = useQuery(api.transfers.getAllTransfers, adminWallet ? { adminWallet } : adminEmail ? { adminEmail } : "skip");
+function TransferHistoryTab({ adminWallet }: { adminWallet?: string }) {
+  const transfers = useQuery(api.transfers.getAllTransfers, adminWallet ? { adminWallet } : "skip");
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failed">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -1899,12 +1889,11 @@ function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
       // Save transfer to database
       await createTransfer({
         adminWallet,
-        adminEmail,
         fromAddress,
         toAddress,
         amount,
         txHash: receipt.hash,
-        transferredBy: adminWallet || adminEmail || "unknown",
+        transferredBy: adminWallet || "unknown",
         status: "success",
       });
 
@@ -1921,12 +1910,11 @@ function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
       try {
         await createTransfer({
           adminWallet,
-          adminEmail,
           fromAddress,
           toAddress,
           amount,
           txHash: "failed",
-          transferredBy: adminWallet || adminEmail || "unknown",
+          transferredBy: adminWallet || "unknown",
           status: "failed",
           note: err.reason || err.message || "Transfer failed",
         });
