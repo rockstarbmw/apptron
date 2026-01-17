@@ -117,9 +117,32 @@ declare global {
 
 export default function Admin() {
   const [adminWallet, setAdminWallet] = useState<string>("");
+  const [teamMember, setTeamMember] = useState<{ username: string; role: string } | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const navigate = useNavigate();
+  
+  // Check for team member session on load
+  useEffect(() => {
+    const session = localStorage.getItem("teamMemberSession");
+    if (session) {
+      try {
+        const parsed = JSON.parse(session);
+        // Check if session is less than 24 hours old
+        if (Date.now() - parsed.loginTime < 24 * 60 * 60 * 1000) {
+          setTeamMember({ username: parsed.username, role: parsed.role });
+          setIsAuthorized(true);
+          toast.success(`Welcome back, ${parsed.username}!`);
+        } else {
+          // Session expired
+          localStorage.removeItem("teamMemberSession");
+          toast.error("Session expired. Please login again.");
+        }
+      } catch (error) {
+        localStorage.removeItem("teamMemberSession");
+      }
+    }
+  }, []);
   
   // Use backend verification instead of frontend check
   const verifyWallet = useQuery(
@@ -163,7 +186,7 @@ export default function Admin() {
   }
 
   // Loading state - wallet not connected yet
-  if (!adminWallet) {
+  if (!teamMember && !adminWallet) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="w-full max-w-md">
@@ -177,6 +200,15 @@ export default function Admin() {
             <Button onClick={connectWallet} className="w-full" disabled={isVerifying}>
               {isVerifying ? "Connecting..." : "Connect Wallet"}
             </Button>
+            <div className="pt-4 border-t text-center text-sm text-muted-foreground">
+              Team Member?{" "}
+              <button
+                onClick={() => navigate("/team-login")}
+                className="text-primary hover:underline font-medium"
+              >
+                Login here
+              </button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -184,7 +216,7 @@ export default function Admin() {
   }
 
   // Verifying wallet with backend
-  if (isVerifying || isAuthorized === null) {
+  if (!teamMember && (isVerifying || isAuthorized === null)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="w-full max-w-md">
@@ -203,7 +235,7 @@ export default function Admin() {
   }
 
   // Access denied
-  if (isAuthorized === false) {
+  if (!teamMember && isAuthorized === false) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-6">
@@ -218,15 +250,20 @@ export default function Admin() {
   }
 
   // Authorized - show admin page
-  return <AdminPage adminWallet={adminWallet} />;
+  return <AdminPage adminWallet={adminWallet} teamMember={teamMember} />;
 }
 
-export function AdminPage({ adminWallet, adminEmail }: { adminWallet?: string; adminEmail?: string }) {
+export function AdminPage({ adminWallet, adminEmail, teamMember }: { adminWallet?: string; adminEmail?: string; teamMember?: { username: string; role: string } | null }) {
   const navigate = useNavigate();
   const { signoutRedirect } = useAuth();
 
   const handleLogout = async () => {
-    if (adminEmail) {
+    if (teamMember) {
+      // Team member - clear session and redirect
+      localStorage.removeItem("teamMemberSession");
+      navigate("/team-login");
+      window.location.reload();
+    } else if (adminEmail) {
       // Email-based super admin - use Hercules Auth signout
       await signoutRedirect();
     } else {
@@ -256,7 +293,12 @@ export function AdminPage({ adminWallet, adminEmail }: { adminWallet?: string; a
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {adminEmail ? (
+              {teamMember ? (
+                <Badge variant="outline" className="px-4 py-2 text-xs">
+                  <UserCog className="mr-2 h-3 w-3" />
+                  {teamMember.username} ({teamMember.role})
+                </Badge>
+              ) : adminEmail ? (
                 <Badge variant="outline" className="px-4 py-2 text-xs">
                   <Shield className="mr-2 h-3 w-3" />
                   Super Admin
