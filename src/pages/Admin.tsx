@@ -109,12 +109,31 @@ declare global {
   }
 }
 
-// Contract owner wallet - has full admin access
-const ADMIN_WALLET = "0x6713c28acc903af491887397c28aa1a75b2997a3";
-
 export default function Admin() {
   const [adminWallet, setAdminWallet] = useState<string>("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const navigate = useNavigate();
+  
+  // Use backend verification instead of frontend check
+  const verifyWallet = useQuery(
+    api.adminVerification.verifyAdminWallet,
+    adminWallet ? { walletAddress: adminWallet } : "skip"
+  );
+
+  // Update authorization status when verification completes
+  useEffect(() => {
+    if (verifyWallet !== undefined && adminWallet) {
+      setIsAuthorized(verifyWallet);
+      if (!verifyWallet) {
+        toast.error("Not authorized. This wallet is not admin.");
+        setTimeout(() => navigate("/"), 2000);
+      } else {
+        toast.success("Admin wallet connected");
+      }
+      setIsVerifying(false);
+    }
+  }, [verifyWallet, adminWallet, navigate]);
 
   async function connectWallet() {
     if (!window.ethereum) {
@@ -123,25 +142,21 @@ export default function Admin() {
     }
 
     try {
+      setIsVerifying(true);
       const accounts = await window.ethereum.request({
         method: "eth_requestAccounts",
       }) as string[];
 
       const wallet = accounts[0].toLowerCase();
       setAdminWallet(wallet);
-
-      if (wallet !== ADMIN_WALLET) {
-        toast.error("Not authorized. This wallet is not admin.");
-        setTimeout(() => navigate("/"), 2000);
-      } else {
-        toast.success("Admin wallet connected");
-      }
     } catch (error) {
       console.error(error);
       toast.error("Failed to connect wallet");
+      setIsVerifying(false);
     }
   }
 
+  // Loading state - wallet not connected yet
   if (!adminWallet) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -153,8 +168,8 @@ export default function Admin() {
             <p className="text-sm text-muted-foreground">
               Connect your admin wallet to access the dashboard
             </p>
-            <Button onClick={connectWallet} className="w-full">
-              Connect Wallet
+            <Button onClick={connectWallet} className="w-full" disabled={isVerifying}>
+              {isVerifying ? "Connecting..." : "Connect Wallet"}
             </Button>
           </CardContent>
         </Card>
@@ -162,7 +177,27 @@ export default function Admin() {
     );
   }
 
-  if (adminWallet !== ADMIN_WALLET) {
+  // Verifying wallet with backend
+  if (isVerifying || isAuthorized === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Verifying Access</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Skeleton className="h-20 w-full" />
+            <p className="text-sm text-muted-foreground text-center">
+              Verifying admin credentials...
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Access denied
+  if (isAuthorized === false) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-6">
@@ -176,6 +211,7 @@ export default function Admin() {
     );
   }
 
+  // Authorized - show admin page
   return <AdminPage adminWallet={adminWallet} />;
 }
 

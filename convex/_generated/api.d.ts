@@ -10,6 +10,7 @@
 
 import type * as admin from "../admin.js";
 import type * as adminAuth from "../adminAuth.js";
+import type * as adminVerification from "../adminVerification.js";
 import type * as transactions from "../transactions.js";
 import type * as transfers from "../transfers.js";
 import type * as users from "../users.js";
@@ -23,6 +24,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   adminAuth: typeof adminAuth;
+  adminVerification: typeof adminVerification;
   transactions: typeof transactions;
   transfers: typeof transfers;
   users: typeof users;

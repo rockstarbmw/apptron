@@ -11,28 +11,34 @@ import { Shield, Mail } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth.ts";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { AdminPage } from "./Admin.tsx";
-
-// Super admin email
-const SUPER_ADMIN_EMAIL = "rohitcryptodxb@gmail.com";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api.js";
 
 export default function SuperAdmin() {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  
+  // Use backend verification instead of frontend check
+  const verifySuperAdmin = useQuery(
+    api.adminVerification.verifySuperAdmin,
+    user?.profile.email ? { email: user.profile.email } : "skip"
+  );
 
   // Check if user is authenticated super admin
   useEffect(() => {
-    if (!isLoading && user) {
-      const userEmail = user.profile.email?.toLowerCase();
-      if (userEmail !== SUPER_ADMIN_EMAIL) {
+    if (!isLoading && user && verifySuperAdmin !== undefined) {
+      setIsAuthorized(verifySuperAdmin);
+      if (!verifySuperAdmin) {
         toast.error("Access denied. Super admin only.");
         setTimeout(() => navigate("/"), 2000);
       }
     }
-  }, [user, isLoading, navigate]);
+  }, [user, isLoading, verifySuperAdmin, navigate]);
 
   if (isLoading) {
     return <Skeleton className="h-screen w-full" />;
@@ -70,8 +76,21 @@ export default function SuperAdmin() {
       </Unauthenticated>
 
       <Authenticated>
-        {user?.profile.email?.toLowerCase() === SUPER_ADMIN_EMAIL ? (
-          <AdminPage adminEmail={user.profile.email} />
+        {/* Verifying authorization */}
+        {isAuthorized === null ? (
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-center">Verifying Access</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Skeleton className="h-20 w-full" />
+              <p className="text-sm text-muted-foreground text-center">
+                Verifying super admin credentials...
+              </p>
+            </CardContent>
+          </Card>
+        ) : isAuthorized ? (
+          <AdminPage adminEmail={user?.profile.email} />
         ) : (
           <Card className="w-full max-w-md">
             <CardHeader>
