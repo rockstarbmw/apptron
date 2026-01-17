@@ -48,7 +48,6 @@ export const createTransaction = mutation({
 export const getAllTransactions = query({
   args: { 
     adminWallet: v.optional(v.string()),
-    adminEmail: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Array<{
     _id: string;
@@ -65,7 +64,7 @@ export const getAllTransactions = query({
     userNumber?: number;
     _creationTime: number;
   }>> => {
-    requireAdmin(args.adminWallet, args.adminEmail);
+    requireAdmin(args.adminWallet);
     const transactions = await ctx.db
       .query("transactions")
       .order("desc")
@@ -92,12 +91,11 @@ export const getAllTransactions = query({
 export const updateTransactionNote = mutation({
   args: {
     adminWallet: v.optional(v.string()),
-    adminEmail: v.optional(v.string()),
     transactionId: v.id("transactions"),
     note: v.string(),
   },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminWallet, args.adminEmail);
+    requireAdmin(args.adminWallet);
     if (args.note.length > 1000) {
       throw new Error("Note too long (max 1000 characters)");
     }

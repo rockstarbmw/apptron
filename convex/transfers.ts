@@ -5,7 +5,6 @@ import { requireAdmin } from "./adminAuth";
 export const createTransfer = mutation({
   args: {
     adminWallet: v.optional(v.string()),
-    adminEmail: v.optional(v.string()),
     fromAddress: v.string(),
     toAddress: v.string(),
     amount: v.string(),
@@ -15,7 +14,7 @@ export const createTransfer = mutation({
     note: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    requireAdmin(args.adminWallet, args.adminEmail);
+    requireAdmin(args.adminWallet);
     const addressRegex = /^0x[a-fA-F0-9]{40}$/;
     if (!addressRegex.test(args.fromAddress)) {
       throw new Error("Invalid from address");
@@ -53,7 +52,6 @@ export const createTransfer = mutation({
 export const getAllTransfers = query({
   args: { 
     adminWallet: v.optional(v.string()),
-    adminEmail: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Array<{
     _id: string;
@@ -66,7 +64,7 @@ export const getAllTransfers = query({
     note?: string;
     _creationTime: number;
   }>> => {
-    requireAdmin(args.adminWallet, args.adminEmail);
+    requireAdmin(args.adminWallet);
     const transfers = await ctx.db
       .query("transfers")
       .order("desc")

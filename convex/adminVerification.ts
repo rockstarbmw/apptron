@@ -1,7 +1,7 @@
 // Admin verification functions - secure backend validation
 import { query } from "./_generated/server";
 import { v } from "convex/values";
-import { isAdmin, isSuperAdmin } from "./adminAuth";
+import { isAdmin, isSuperAdminWallet } from "./adminAuth";
 
 // Verify if a wallet address is admin
 export const verifyAdminWallet = query({
@@ -11,10 +11,10 @@ export const verifyAdminWallet = query({
   },
 });
 
-// Verify if an email is super admin
-export const verifySuperAdmin = query({
-  args: { email: v.string() },
+// Verify if a wallet address is super admin
+export const verifySuperAdminWallet = query({
+  args: { walletAddress: v.string() },
   handler: async (ctx, args): Promise<boolean> => {
-    return isSuperAdmin(args.email);
+    return isSuperAdminWallet(args.walletAddress);
   },
 });
