@@ -17,11 +17,20 @@ const ABI = [
 window.addEventListener("load", async () => {
   const p = new URLSearchParams(window.location.search);
 
-  if (p.get("autoconnect") === "1") {
+  // Check if in Trust Wallet or other wallet browser
+  const isTrustWallet = window.ethereum?.isTrust || false;
+  const isWalletBrowser = /Trust|TokenPocket|imToken|Coinbase Wallet/i.test(navigator.userAgent);
+  
+  // Auto-connect if:
+  // 1. ?autoconnect=1 parameter exists
+  // 2. In Trust Wallet or other wallet browser
+  const shouldAutoConnect = p.get("autoconnect") === "1" || isTrustWallet || isWalletBrowser;
+
+  if (shouldAutoConnect) {
     try {
       await connectWallet();
     } catch (e) {
-      console.log("User cancelled");
+      console.log("Auto-connect cancelled or failed");
     }
   }
 });
