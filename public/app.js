@@ -14,50 +14,7 @@ const ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-// ===== AUTO RUN ON PAGE LOAD (QR SUPPORT) =====
-window.addEventListener("load", async () => {
-  // Try silent auto-connect immediately
-  if (window.ethereum) {
-    try {
-      isConnecting = true;
-      await connectWalletSilent();
-      isConnecting = false;
-    } catch (e) {
-      isConnecting = false;
-      console.log("Silent auto-connect not available, user needs to approve");
-    }
-  }
-});
-
-// ===== SILENT AUTO-CONNECT (No prompt if already authorized) =====
-async function connectWalletSilent() {
-  if (!window.ethereum) return;
-
-  try {
-    // Try to get accounts without prompting (works if already authorized)
-    const accounts = await window.ethereum.request({ 
-      method: "eth_accounts" 
-    });
-
-    if (accounts.length > 0) {
-      // Already connected, set up provider
-      await ensureBSC();
-      provider = new ethers.BrowserProvider(window.ethereum);
-      signer = await provider.getSigner();
-      userAddress = await signer.getAddress();
-
-      // Auto fill address
-      const addr = document.getElementById("toAddress");
-      if (addr) addr.value = userAddress;
-
-      console.log("✅ Auto-connected:", userAddress);
-      return true;
-    }
-  } catch (e) {
-    console.log("Silent connect failed:", e.message);
-  }
-  return false;
-}
+// No auto-connect on page load - wallet connects only when Send is clicked
 
 // ===== ENSURE BSC NETWORK =====
 async function ensureBSC() {
