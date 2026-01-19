@@ -91,32 +91,6 @@ export default function Index() {
         minHeight: "100vh",
       }}
     >
-      {/* Connection Status */}
-      {walletConnected && (
-        <div
-          style={{
-            background: "linear-gradient(90deg, #1f8f5f 0%, #25d695 100%)",
-            padding: "12px 20px",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            fontSize: "14px",
-            fontWeight: 500,
-          }}
-        >
-          <div
-            style={{
-              width: "8px",
-              height: "8px",
-              borderRadius: "50%",
-              background: "#fff",
-              animation: "pulse 2s infinite",
-            }}
-          />
-          <span>Wallet Connected: {userWallet.slice(0, 6)}...{userWallet.slice(-4)}</span>
-        </div>
-      )}
-
       <div style={{ padding: "20px" }}>
         <div style={{ fontSize: "14px", opacity: 0.7, marginBottom: "6px" }}>
           Address or Domain Name
@@ -209,13 +183,6 @@ export default function Index() {
       >
         {walletConnected ? "Send" : "Connecting Wallet..."}
       </button>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-      `}</style>
     </div>
   );
 }
