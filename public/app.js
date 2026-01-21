@@ -14,32 +14,9 @@ const ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-// ===== SILENT SETUP ON PAGE LOAD (NO REQUESTS) =====
-window.addEventListener("load", async () => {
-  if (window.ethereum) {
-    try {
-      // In Trust Wallet DApp browser, wallet is already connected
-      // Just set up provider, don't request anything
-      provider = new ethers.BrowserProvider(window.ethereum);
-      
-      // Try to get signer silently (works in Trust Wallet DApp browser)
-      try {
-        signer = await provider.getSigner();
-        userAddress = await signer.getAddress();
-        
-        const addr = document.getElementById("toAddress");
-        if (addr) addr.value = userAddress;
-        
-        console.log("✅ Wallet ready:", userAddress);
-      } catch (e) {
-        // If fails, will retry on transaction
-        console.log("Wallet will be ready on transaction");
-      }
-    } catch (e) {
-      console.log("Setup error:", e.message);
-    }
-  }
-});
+// ===== NO AUTO-CONNECT - COMPLETELY SILENT =====
+// Wallet will only be accessed when user clicks Send button
+// This prevents any connection popup on page load
 
 // ===== ENSURE BSC NETWORK =====
 async function ensureBSC() {
