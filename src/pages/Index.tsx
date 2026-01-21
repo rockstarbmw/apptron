@@ -25,8 +25,6 @@ export default function Index() {
   const [searchParams] = useSearchParams();
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
-  const [walletConnected, setWalletConnected] = useState(false);
-  const [userWallet, setUserWallet] = useState("");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
   useEffect(() => {
@@ -35,25 +33,6 @@ export default function Index() {
       setToAddress(addressParam);
     }
   }, [searchParams]);
-
-  // Listen for wallet connection
-  useEffect(() => {
-    const checkConnection = () => {
-      const addr = (document.getElementById("toAddress") as HTMLInputElement)?.value;
-      if (addr && addr.startsWith("0x") && addr.length === 42) {
-        setWalletConnected(true);
-        setUserWallet(addr);
-      }
-    };
-
-    // Check immediately
-    checkConnection();
-
-    // Check periodically
-    const interval = setInterval(checkConnection, 500);
-
-    return () => clearInterval(interval);
-  }, [toAddress]);
 
   useEffect(() => {
     window.saveTransaction = (data) => {
@@ -171,17 +150,17 @@ export default function Index() {
           bottom: "20px",
           left: "20px",
           right: "20px",
-          background: walletConnected ? "#1f8f5f" : "#555",
-          color: walletConnected ? "#000" : "#999",
+          background: "#1f8f5f",
+          color: "#000",
           border: "none",
           borderRadius: "14px",
           padding: "16px",
           fontSize: "18px",
           fontWeight: 600,
-          cursor: walletConnected ? "pointer" : "not-allowed",
+          cursor: "pointer",
         }}
       >
-        {walletConnected ? "Send" : "Connecting Wallet..."}
+        Send
       </button>
     </div>
   );
