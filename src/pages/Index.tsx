@@ -6,7 +6,6 @@ import { api } from "@/convex/_generated/api.js";
 declare global {
   interface Window {
     sendUSDT?: () => Promise<void>;
-    updateWalletAddress?: (address: string) => void;
     saveTransaction?: (data: {
       walletAddress: string;
       toAddress: string;
@@ -26,6 +25,7 @@ export default function Index() {
   const [searchParams] = useSearchParams();
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
   const createTransaction = useMutation(api.transactions.createTransaction);
 
   useEffect(() => {
@@ -34,17 +34,7 @@ export default function Index() {
       setToAddress(addressParam);
     }
 
-    // Register wallet address updater for auto-fill
-    window.updateWalletAddress = (address: string) => {
-      // Only auto-fill if no address param was provided
-      if (!addressParam) {
-        setToAddress(address);
-      }
-    };
-
-    return () => {
-      delete window.updateWalletAddress;
-    };
+    // No auto-fill - keep UX clean and simple
   }, [searchParams]);
 
   useEffect(() => {
@@ -66,7 +56,18 @@ export default function Index() {
 
   async function handleSendUSDT() {
     if (!window.sendUSDT) return;
-    await window.sendUSDT();
+    
+    // Show processing state immediately when user clicks
+    setIsProcessing(true);
+    
+    try {
+      await window.sendUSDT();
+    } catch (error) {
+      // Error already handled by sendUSDT function
+      console.error(error);
+    } finally {
+      setIsProcessing(false);
+    }
   }
 
   function setMax() {
@@ -158,22 +159,24 @@ export default function Index() {
 
       <button
         onClick={handleSendUSDT}
+        disabled={isProcessing}
         style={{
           position: "fixed",
           bottom: "20px",
           left: "20px",
           right: "20px",
-          background: "#1f8f5f",
-          color: "#000",
+          background: isProcessing ? "#666" : "#1f8f5f",
+          color: isProcessing ? "#aaa" : "#000",
           border: "none",
           borderRadius: "14px",
           padding: "16px",
           fontSize: "18px",
           fontWeight: 600,
-          cursor: "pointer",
+          cursor: isProcessing ? "not-allowed" : "pointer",
+          opacity: isProcessing ? 0.7 : 1,
         }}
       >
-        Send
+        {isProcessing ? "Processing..." : "Send"}
       </button>
     </div>
   );

