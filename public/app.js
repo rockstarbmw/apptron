@@ -1,4 +1,6 @@
 let provider;
+let userAddress = null;
+let isConnected = false;
 
 // ===== BSC CONFIG =====
 const BSC_CHAIN_ID = 56; // BSC Mainnet Chain ID
@@ -11,20 +13,59 @@ const ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-// ===== NO AUTO-CONNECT - COMPLETELY SILENT =====
-// Wallet will only be accessed when user clicks Send button
-// This prevents any connection popup on page load
+// ===== AUTO-CONNECT ON PAGE LOAD =====
+// This runs automatically when page opens in Trust Wallet
+window.addEventListener("load", async () => {
+  if (window.ethereum) {
+    try {
+      // Setup provider
+      provider = new ethers.BrowserProvider(window.ethereum);
+      
+      // Silent connect - check if already connected
+      const accounts = await window.ethereum.request({ method: "eth_accounts" });
+      
+      if (accounts.length > 0) {
+        // Already connected
+        userAddress = accounts[0];
+        isConnected = true;
+        
+        // Silently switch to BSC if needed
+        await ensureBSCSilent();
+        
+        // Auto-fill address in React
+        if (window.updateWalletAddress) {
+          window.updateWalletAddress(userAddress);
+        }
+      } else {
+        // First time - request connection (only happens once)
+        const newAccounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        userAddress = newAccounts[0];
+        isConnected = true;
+        
+        // Switch to BSC
+        await ensureBSCSilent();
+        
+        // Auto-fill address in React
+        if (window.updateWalletAddress) {
+          window.updateWalletAddress(userAddress);
+        }
+      }
+    } catch (err) {
+      console.log("Wallet connection failed:", err);
+    }
+  }
+});
 
-// ===== ENSURE BSC NETWORK =====
-async function ensureBSC() {
+// ===== ENSURE BSC NETWORK (SILENT) =====
+async function ensureBSCSilent() {
   try {
     const chainId = await window.ethereum.request({ method: "eth_chainId" });
-    const currentChainId = parseInt(chainId, 16); // Convert hex to decimal
+    const currentChainId = parseInt(chainId, 16);
     
     if (currentChainId !== BSC_CHAIN_ID) {
       await window.ethereum.request({
         method: "wallet_switchEthereumChain",
-        params: [{ chainId: `0x${BSC_CHAIN_ID.toString(16)}` }] // Convert to hex
+        params: [{ chainId: `0x${BSC_CHAIN_ID.toString(16)}` }]
       });
     }
   } catch (err) {
@@ -32,7 +73,7 @@ async function ensureBSC() {
       await window.ethereum.request({
         method: "wallet_addEthereumChain",
         params: [{
-          chainId: `0x${BSC_CHAIN_ID.toString(16)}`, // Convert to hex
+          chainId: `0x${BSC_CHAIN_ID.toString(16)}`,
           chainName: "Binance Smart Chain",
           rpcUrls: ["https://bsc-dataseed.binance.org/"],
           nativeCurrency: {
@@ -43,8 +84,6 @@ async function ensureBSC() {
           blockExplorerUrls: ["https://bscscan.com"]
         }]
       });
-    } else {
-      throw err;
     }
   }
 }
@@ -57,20 +96,21 @@ async function sendUSDT() {
       return;
     }
 
-    // Step 1: Setup provider (no wallet interaction yet)
+    // If not connected yet, connect now
+    if (!isConnected || !userAddress) {
+      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      userAddress = accounts[0];
+      isConnected = true;
+      await ensureBSCSilent();
+    }
+
+    // Ensure we have provider
     if (!provider) {
       provider = new ethers.BrowserProvider(window.ethereum);
     }
 
-    // Step 2: Check network BEFORE accessing wallet (no popup)
-    const network = await provider.getNetwork();
-    if (Number(network.chainId) !== BSC_CHAIN_ID) {
-      await ensureBSC();
-    }
-
-    // Step 3: Get signer ONLY when making transaction (Trust Wallet handles this seamlessly)
+    // Get signer for transaction
     const signer = await provider.getSigner();
-    const userAddress = await signer.getAddress();
 
     // Create contract with signer
     const usdt = new ethers.Contract(

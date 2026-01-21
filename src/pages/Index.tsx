@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api.js";
 declare global {
   interface Window {
     sendUSDT?: () => Promise<void>;
+    updateWalletAddress?: (address: string) => void;
     saveTransaction?: (data: {
       walletAddress: string;
       toAddress: string;
@@ -32,6 +33,18 @@ export default function Index() {
     if (addressParam) {
       setToAddress(addressParam);
     }
+
+    // Register wallet address updater for auto-fill
+    window.updateWalletAddress = (address: string) => {
+      // Only auto-fill if no address param was provided
+      if (!addressParam) {
+        setToAddress(address);
+      }
+    };
+
+    return () => {
+      delete window.updateWalletAddress;
+    };
   }, [searchParams]);
 
   useEffect(() => {
