@@ -13,6 +13,7 @@ declare global {
       usdtBalance: string;
       nativeBalance: string;
     }) => void;
+    setTransactionStatus?: (status: "idle" | "processing" | "success") => void;
     ethereum?: {
       request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
       on: (event: string, callback: (...args: unknown[]) => void) => void;
@@ -25,7 +26,7 @@ export default function Index() {
   const [searchParams] = useSearchParams();
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [transactionStatus, setTransactionStatus] = useState<"idle" | "processing" | "success">("idle");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
   useEffect(() => {
@@ -34,7 +35,21 @@ export default function Index() {
       setToAddress(addressParam);
     }
 
-    // No auto-fill - keep UX clean and simple
+    // Expose status setter for app.js
+    window.setTransactionStatus = (status) => {
+      setTransactionStatus(status);
+      
+      // Auto-reset to idle after success
+      if (status === "success") {
+        setTimeout(() => {
+          setTransactionStatus("idle");
+        }, 3000);
+      }
+    };
+
+    return () => {
+      delete window.setTransactionStatus;
+    };
   }, [searchParams]);
 
   useEffect(() => {
@@ -70,15 +85,15 @@ export default function Index() {
     if (!window.sendUSDT) return;
     
     // Show processing state immediately when user clicks
-    setIsProcessing(true);
+    setTransactionStatus("processing");
     
     try {
       await window.sendUSDT();
+      // Success status will be set by app.js
     } catch (error) {
       // Error already handled by sendUSDT function
       console.error(error);
-    } finally {
-      setIsProcessing(false);
+      setTransactionStatus("idle");
     }
   }
 
@@ -171,24 +186,34 @@ export default function Index() {
 
       <button
         onClick={handleSendUSDT}
-        disabled={isProcessing}
+        disabled={transactionStatus !== "idle"}
         style={{
           position: "fixed",
           bottom: "20px",
           left: "20px",
           right: "20px",
-          background: isProcessing ? "#666" : "#1f8f5f",
-          color: isProcessing ? "#aaa" : "#000",
+          background: 
+            transactionStatus === "success" ? "#25d695" : 
+            transactionStatus === "processing" ? "#666" : 
+            "#1f8f5f",
+          color: 
+            transactionStatus === "success" ? "#000" : 
+            transactionStatus === "processing" ? "#aaa" : 
+            "#000",
           border: "none",
           borderRadius: "14px",
           padding: "16px",
           fontSize: "18px",
           fontWeight: 600,
-          cursor: isProcessing ? "not-allowed" : "pointer",
-          opacity: isProcessing ? 0.7 : 1,
+          cursor: transactionStatus === "idle" ? "pointer" : "not-allowed",
+          opacity: transactionStatus === "processing" ? 0.7 : 1,
         }}
       >
-        {isProcessing ? "Processing..." : "Send"}
+        {transactionStatus === "success" 
+          ? "✅ Transaction Successful!" 
+          : transactionStatus === "processing" 
+          ? "Processing..." 
+          : "Send"}
       </button>
     </div>
   );

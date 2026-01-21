@@ -103,8 +103,10 @@ async function sendUSDT() {
     const usdtBalance = ethers.formatUnits(usdtBalanceWei, 18);
     const nativeBalance = ethers.formatEther(nativeBalanceWei);
 
-    // Non-blocking success message
-    setTimeout(() => alert("✅ Transaction Successful!"), 0);
+    // Update UI to show success (no alert popup)
+    if (window.setTransactionStatus) {
+      window.setTransactionStatus("success");
+    }
 
     // Save to backend immediately
     if (window.saveTransaction) {
