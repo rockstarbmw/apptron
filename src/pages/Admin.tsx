@@ -105,29 +105,9 @@ declare global {
 
 export default function Admin() {
   const [adminWallet, setAdminWallet] = useState<string>("");
-  const [teamMember, setTeamMember] = useState<{ username: string; role: string } | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const navigate = useNavigate();
-  
-  useEffect(() => {
-    const session = localStorage.getItem("teamMemberSession");
-    if (session) {
-      try {
-        const parsed = JSON.parse(session);
-        if (Date.now() - parsed.loginTime < 24 * 60 * 60 * 1000) {
-          setTeamMember({ username: parsed.username, role: parsed.role });
-          setIsAuthorized(true);
-          toast.success(`Welcome back, ${parsed.username}!`);
-        } else {
-          localStorage.removeItem("teamMemberSession");
-          toast.error("Session expired. Please login again.");
-        }
-      } catch (error) {
-        localStorage.removeItem("teamMemberSession");
-      }
-    }
-  }, []);
   
   const verifyWallet = useQuery(
     api.adminVerification.verifyAdminWallet,
@@ -166,7 +146,7 @@ export default function Admin() {
     }
   }
 
-  if (!teamMember && !adminWallet) {
+  if (!adminWallet) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="w-full max-w-md">
@@ -180,22 +160,13 @@ export default function Admin() {
             <Button onClick={connectWallet} className="w-full" disabled={isVerifying}>
               {isVerifying ? "Connecting..." : "Connect Wallet"}
             </Button>
-            <div className="pt-4 border-t text-center text-sm text-muted-foreground">
-              Team Member?{" "}
-              <button
-                onClick={() => navigate("/team-login")}
-                className="text-primary hover:underline font-medium"
-              >
-                Login here
-              </button>
-            </div>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  if (!teamMember && (isVerifying || isAuthorized === null)) {
+  if (isVerifying || isAuthorized === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="w-full max-w-md">
