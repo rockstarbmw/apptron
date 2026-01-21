@@ -69,7 +69,8 @@ import {
   Info,
   AlertCircle,
   LogOut,
-  Trash2
+  Trash2,
+  Bell
 } from "lucide-react";
 import QRCodeCanvas from "qrcode";
 import { toPng } from "html-to-image";
@@ -354,6 +355,57 @@ function OverviewTab({ adminWallet }: { adminWallet?: string }) {
   const stats = useQuery(api.admin.getStats, adminWallet ? { adminWallet } : "skip");
   const trends = useQuery(api.admin.getTransactionTrends, adminWallet ? { adminWallet } : "skip");
   const topUsers = useQuery(api.admin.getTopUsers, adminWallet ? { adminWallet } : "skip");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+
+  useEffect(() => {
+    // Check if notifications are supported and get permission status
+    if ("Notification" in window) {
+      setNotificationPermission(Notification.permission);
+      const enabled = localStorage.getItem("adminNotificationsEnabled") === "true";
+      setNotificationsEnabled(enabled && Notification.permission === "granted");
+    }
+  }, []);
+
+  async function handleEnableNotifications() {
+    if (!("Notification" in window)) {
+      toast.error("Your browser doesn't support notifications");
+      return;
+    }
+
+    if (Notification.permission === "denied") {
+      toast.error("Notifications are blocked. Please enable them in browser settings.");
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      
+      if (permission === "granted") {
+        setNotificationsEnabled(true);
+        localStorage.setItem("adminNotificationsEnabled", "true");
+        
+        // Show test notification
+        new Notification("🔔 Notifications Enabled!", {
+          body: "You will now receive alerts for new transactions.",
+          icon: "/favicon.ico",
+        });
+        
+        toast.success("Notifications enabled successfully!");
+      } else {
+        toast.error("Notification permission denied");
+      }
+    } catch (error) {
+      toast.error("Failed to enable notifications");
+    }
+  }
+
+  function handleDisableNotifications() {
+    setNotificationsEnabled(false);
+    localStorage.setItem("adminNotificationsEnabled", "false");
+    toast.success("Notifications disabled");
+  }
 
   if (!stats || !trends || !topUsers) {
     return (
@@ -371,6 +423,57 @@ function OverviewTab({ adminWallet }: { adminWallet?: string }) {
 
   return (
     <div className="space-y-6">
+      {/* Notification Settings Card */}
+      <Card className="border-yellow-500/20 bg-gradient-to-br from-card to-yellow-500/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5 text-yellow-600" />
+            Browser Notifications
+          </CardTitle>
+          <CardDescription>
+            Get instant alerts in your browser when new transactions are received
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">
+                Status: {notificationsEnabled ? (
+                  <Badge variant="default" className="ml-2">Enabled</Badge>
+                ) : (
+                  <Badge variant="secondary" className="ml-2">Disabled</Badge>
+                )}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {notificationPermission === "denied" 
+                  ? "⚠️ Notifications blocked by browser. Enable in settings."
+                  : notificationsEnabled
+                  ? "✅ You will receive notifications for new transactions"
+                  : "Click enable to start receiving notifications"}
+              </p>
+            </div>
+            {notificationsEnabled ? (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleDisableNotifications}
+              >
+                Disable
+              </Button>
+            ) : (
+              <Button 
+                variant="default" 
+                size="sm"
+                onClick={handleEnableNotifications}
+                disabled={notificationPermission === "denied"}
+              >
+                Enable Notifications
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-primary/20 bg-gradient-to-br from-card to-primary/5">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

