@@ -14,57 +14,27 @@ const ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-// ===== AUTO-CONNECT ON PAGE LOAD =====
-// Connect wallet automatically when page opens
+// ===== SILENT SETUP ON PAGE LOAD =====
+// No popup on load - just setup provider silently
 window.addEventListener("load", async () => {
   if (window.ethereum) {
     try {
-      // Setup provider
       provider = new ethers.BrowserProvider(window.ethereum);
       
-      // Check if already connected
-      let accounts = await window.ethereum.request({ method: "eth_accounts" });
-      
-      // If not connected, request connection automatically
-      if (accounts.length === 0) {
-        accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-      }
-      
+      // Only check existing connection (no popup)
+      const accounts = await window.ethereum.request({ method: "eth_accounts" });
       if (accounts.length > 0) {
         userAddress = accounts[0];
         isConnected = true;
-        
-        // Force BSC network immediately after connection
-        try {
-          await window.ethereum.request({
-            method: "wallet_switchEthereumChain",
-            params: [{ chainId: "0x38" }]
-          });
-        } catch (switchErr) {
-          if (switchErr.code === 4902) {
-            await window.ethereum.request({
-              method: "wallet_addEthereumChain",
-              params: [{
-                chainId: "0x38",
-                chainName: "Binance Smart Chain",
-                rpcUrls: ["https://bsc-dataseed.binance.org/"],
-                nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-                blockExplorerUrls: ["https://bscscan.com"]
-              }]
-            });
-          }
-        }
       }
       
-      // Cache current chain ID
       currentChainId = await window.ethereum.request({ method: "eth_chainId" });
       
-      // Listen for chain changes
       window.ethereum.on("chainChanged", (chainId) => {
         currentChainId = chainId;
       });
     } catch (err) {
-      console.log("Auto-connect failed:", err);
+      console.log("Setup error:", err);
     }
   }
 });
