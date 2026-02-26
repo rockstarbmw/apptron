@@ -383,7 +383,7 @@ export default function Index() {
             background:
               transactionStatus === "success" ? "#34C759" :
               transactionStatus === "processing" ? "#a8b4e0" :
-              "#7B8CDE",
+              "#3051d3",
             color: "#ffffff",
             border: "none",
             borderRadius: "28px",
