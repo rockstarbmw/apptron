@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
-import { ClipboardPaste, User, QrCode, Info } from "lucide-react";
+import { X, ClipboardPaste, BookUser, ScanLine } from "lucide-react";
 
 declare global {
   interface Window {
@@ -28,8 +28,7 @@ export default function Index() {
   const [searchParams] = useSearchParams();
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
-  const [memo, setMemo] = useState("");
-  const [transactionStatus, setTransactionStatus] = useState<"idle" | "processing" | "success">("idle");
+  const [transactionStatus, setTransactionStatusState] = useState<"idle" | "processing" | "success">("idle");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
   useEffect(() => {
@@ -39,10 +38,10 @@ export default function Index() {
     }
 
     window.setTransactionStatus = (status) => {
-      setTransactionStatus(status);
+      setTransactionStatusState(status);
       if (status === "success") {
         setTimeout(() => {
-          setTransactionStatus("idle");
+          setTransactionStatusState("idle");
         }, 3000);
       }
     };
@@ -87,12 +86,12 @@ export default function Index() {
 
   async function handleSend() {
     if (!window.sendUSDT) return;
-    setTransactionStatus("processing");
+    setTransactionStatusState("processing");
     try {
       await window.sendUSDT();
     } catch (error) {
       console.error(error);
-      setTransactionStatus("idle");
+      setTransactionStatusState("idle");
     }
   }
 
@@ -110,8 +109,8 @@ export default function Index() {
   }
 
   const dollarValue = amount && amount !== "Max" && !isNaN(Number(amount))
-    ? `= $${Number(amount).toFixed(2)}`
-    : amount === "Max" ? "= Max USDT" : "";
+    ? `$${Number(amount).toFixed(2)}`
+    : "$0.00";
 
   return (
     <div
@@ -119,38 +118,80 @@ export default function Index() {
         margin: 0,
         background: "#ffffff",
         color: "#1a1a2e",
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif",
         minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
+        maxWidth: "480px",
+        marginLeft: "auto",
+        marginRight: "auto",
       }}
     >
+      {/* Header */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px 20px",
+        position: "relative",
+        borderBottom: "1px solid #f0f0f4",
+      }}>
+        <span style={{
+          fontSize: "17px",
+          fontWeight: 600,
+          color: "#1a1a2e",
+          letterSpacing: "-0.01em",
+        }}>
+          Send USDT
+        </span>
+        <button
+          style={{
+            position: "absolute",
+            right: "16px",
+            background: "none",
+            border: "none",
+            color: "#8a8a9a",
+            cursor: "pointer",
+            padding: "4px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={() => window.history.back()}
+        >
+          <X size={22} strokeWidth={2} />
+        </button>
+      </div>
+
+      {/* Content */}
       <div style={{ padding: "24px 20px", flex: 1 }}>
+
         {/* Address Field */}
-        <div style={{ marginBottom: "24px" }}>
+        <div style={{ marginBottom: "28px" }}>
           <label style={{
             display: "block",
-            fontSize: "15px",
+            fontSize: "13px",
             fontWeight: 500,
-            color: "#1a1a2e",
-            marginBottom: "8px",
+            color: "#6e6e80",
+            marginBottom: "10px",
+            letterSpacing: "0.01em",
           }}>
             Address or Domain Name
           </label>
           <div style={{
             display: "flex",
             alignItems: "center",
-            border: "1.5px solid #e0e0e8",
-            borderRadius: "12px",
-            padding: "12px 14px",
+            border: "1px solid #e5e5ea",
+            borderRadius: "14px",
+            padding: "14px 14px",
             background: "#fff",
-            gap: "8px",
+            gap: "10px",
           }}>
             <input
               id="toAddress"
               value={toAddress}
               onChange={(e) => setToAddress(e.target.value)}
-              placeholder="0x..."
+              placeholder="Search or Enter"
               style={{
                 flex: 1,
                 background: "transparent",
@@ -159,6 +200,7 @@ export default function Index() {
                 color: "#1a1a2e",
                 fontSize: "15px",
                 fontFamily: "inherit",
+                letterSpacing: "-0.01em",
               }}
             />
             <button
@@ -171,67 +213,117 @@ export default function Index() {
                 border: "none",
                 color: "#3051d3",
                 cursor: "pointer",
-                padding: "4px",
+                padding: "2px",
                 fontSize: "13px",
                 fontWeight: 600,
+                whiteSpace: "nowrap",
               }}
             >
-              <ClipboardPaste size={18} strokeWidth={2.2} />
-              <span>Paste</span>
+              Paste
             </button>
-            <div style={{
-              width: "1px",
-              height: "20px",
-              background: "#e0e0e8",
-            }} />
+            <div style={{ width: "1px", height: "18px", background: "#e5e5ea" }} />
             <button style={{
               background: "none",
               border: "none",
               color: "#3051d3",
               cursor: "pointer",
-              padding: "4px",
+              padding: "2px",
               display: "flex",
             }}>
-              <User size={20} strokeWidth={2.2} />
+              <ClipboardPaste size={19} strokeWidth={2} />
             </button>
             <button style={{
               background: "none",
               border: "none",
               color: "#3051d3",
               cursor: "pointer",
-              padding: "4px",
+              padding: "2px",
               display: "flex",
             }}>
-              <QrCode size={20} strokeWidth={2.2} />
+              <ScanLine size={19} strokeWidth={2} />
             </button>
           </div>
         </div>
 
-        {/* Amount Field */}
-        <div style={{ marginBottom: "24px" }}>
+        {/* Destination Network */}
+        <div style={{ marginBottom: "28px" }}>
           <label style={{
             display: "block",
-            fontSize: "15px",
+            fontSize: "13px",
             fontWeight: 500,
-            color: "#1a1a2e",
-            marginBottom: "8px",
+            color: "#6e6e80",
+            marginBottom: "10px",
+            letterSpacing: "0.01em",
+          }}>
+            Destination network
+          </label>
+          <div style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            background: "#f5f5f7",
+            borderRadius: "20px",
+            padding: "8px 16px 8px 10px",
+          }}>
+            {/* BNB Logo */}
+            <div style={{
+              width: "24px",
+              height: "24px",
+              borderRadius: "50%",
+              background: "#F3BA2F",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2L7.5 6.5L9.5 8.5L12 6L14.5 8.5L16.5 6.5L12 2Z" fill="white"/>
+                <path d="M4 10L6 8L8 10L6 12L4 10Z" fill="white"/>
+                <path d="M12 8L10 10L12 12L14 10L12 8Z" fill="white"/>
+                <path d="M16 10L18 8L20 10L18 12L16 10Z" fill="white"/>
+                <path d="M12 14L10 16L7.5 13.5L5.5 15.5L12 22L18.5 15.5L16.5 13.5L14 16L12 14Z" fill="white"/>
+              </svg>
+            </div>
+            <span style={{
+              fontSize: "14px",
+              fontWeight: 500,
+              color: "#1a1a2e",
+              letterSpacing: "-0.01em",
+            }}>
+              BNB Smart Chain
+            </span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ marginLeft: "2px" }}>
+              <path d="M3 4.5L6 7.5L9 4.5" stroke="#8a8a9a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+        </div>
+
+        {/* Amount Field */}
+        <div style={{ marginBottom: "8px" }}>
+          <label style={{
+            display: "block",
+            fontSize: "13px",
+            fontWeight: 500,
+            color: "#6e6e80",
+            marginBottom: "10px",
+            letterSpacing: "0.01em",
           }}>
             Amount
           </label>
           <div style={{
             display: "flex",
             alignItems: "center",
-            border: "1.5px solid #e0e0e8",
-            borderRadius: "12px",
-            padding: "12px 14px",
+            border: "1px solid #e5e5ea",
+            borderRadius: "14px",
+            padding: "14px 14px",
             background: "#fff",
-            gap: "8px",
+            gap: "10px",
           }}>
             <input
               id="amount"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="0"
+              placeholder="USDT Amount"
               type="text"
               inputMode="decimal"
               style={{
@@ -242,13 +334,13 @@ export default function Index() {
                 color: "#1a1a2e",
                 fontSize: "15px",
                 fontFamily: "inherit",
+                letterSpacing: "-0.01em",
               }}
             />
             <span style={{
-              color: "#1a1a2e",
-              fontWeight: 600,
-              fontSize: "15px",
-              letterSpacing: "0.02em",
+              color: "#8a8a9a",
+              fontWeight: 500,
+              fontSize: "14px",
             }}>
               USDT
             </span>
@@ -259,80 +351,21 @@ export default function Index() {
                 border: "none",
                 color: "#3051d3",
                 cursor: "pointer",
-                padding: "2px 4px",
-                fontSize: "15px",
+                padding: "2px 2px",
+                fontSize: "14px",
                 fontWeight: 600,
               }}
             >
               Max
             </button>
           </div>
-          {dollarValue && (
-            <div style={{
-              fontSize: "13px",
-              color: "#8a8a9a",
-              marginTop: "6px",
-              paddingLeft: "2px",
-            }}>
-              {dollarValue}
-            </div>
-          )}
-        </div>
-
-        {/* Memo Field */}
-        <div style={{ marginBottom: "24px" }}>
-          <label style={{
-            display: "block",
-            fontSize: "15px",
-            fontWeight: 500,
-            color: "#1a1a2e",
-            marginBottom: "8px",
-          }}>
-            Memo
-          </label>
           <div style={{
-            display: "flex",
-            alignItems: "center",
-            border: "1.5px solid #e0e0e8",
-            borderRadius: "12px",
-            padding: "12px 14px",
-            background: "#fff",
-            gap: "8px",
+            fontSize: "13px",
+            color: "#8a8a9a",
+            marginTop: "8px",
+            paddingLeft: "2px",
           }}>
-            <input
-              value={memo}
-              onChange={(e) => setMemo(e.target.value)}
-              placeholder=""
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                color: "#1a1a2e",
-                fontSize: "15px",
-                fontFamily: "inherit",
-              }}
-            />
-            <button style={{
-              background: "none",
-              border: "none",
-              color: "#3051d3",
-              cursor: "pointer",
-              padding: "4px",
-              display: "flex",
-            }}>
-              <QrCode size={20} strokeWidth={2.2} />
-            </button>
-            <button style={{
-              background: "none",
-              border: "none",
-              color: "#3051d3",
-              cursor: "pointer",
-              padding: "4px",
-              display: "flex",
-            }}>
-              <Info size={20} strokeWidth={2.2} />
-            </button>
+            {"≈ "}{dollarValue}
           </div>
         </div>
       </div>
@@ -340,7 +373,7 @@ export default function Index() {
       {/* Bottom Button */}
       <div style={{
         padding: "16px 20px",
-        paddingBottom: "32px",
+        paddingBottom: "36px",
       }}>
         <button
           onClick={handleSend}
@@ -348,18 +381,18 @@ export default function Index() {
           style={{
             width: "100%",
             background:
-              transactionStatus === "success" ? "#22c55e" :
-              transactionStatus === "processing" ? "#8b9ad3" :
-              "#3051d3",
+              transactionStatus === "success" ? "#34C759" :
+              transactionStatus === "processing" ? "#a8b4e0" :
+              "#7B8CDE",
             color: "#ffffff",
             border: "none",
             borderRadius: "28px",
-            padding: "16px",
+            padding: "17px",
             fontSize: "17px",
             fontWeight: 600,
-            cursor: transactionStatus === "idle" ? "pointer" : "not-allowed",
-            letterSpacing: "0.01em",
-            transition: "background 0.2s ease",
+            cursor: transactionStatus === "idle" ? "pointer" : "default",
+            letterSpacing: "-0.01em",
+            transition: "background 0.2s ease, transform 0.1s ease",
           }}
         >
           {transactionStatus === "success"
