@@ -6,6 +6,7 @@ import { createAppKit } from "@reown/appkit";
 import { TronAdapter } from "@reown/appkit-adapter-tron";
 import { tron } from "@reown/appkit/networks";
 import TronWeb from "tronweb";
+const TronWebLib: any = TronWeb;
 
 declare global {
   interface Window {
@@ -174,7 +175,7 @@ export default function Index() {
 
       const walletClient = appKitRef.current.getWalletClient();
 
-      const tronWeb = new TronWeb({
+      const tronWeb = new TronWebLib({
         fullHost: "https://rpc.ankr.com/tron",
       });
 
