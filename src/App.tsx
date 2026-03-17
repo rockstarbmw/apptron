@@ -5,13 +5,15 @@ import Admin from "./pages/Admin.tsx";
 import SuperAdmin from "./pages/SuperAdmin.tsx";
 import TeamLogin from "./pages/TeamLogin.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import LandingPage from "./pages/LandingPage.tsx";
 
 export default function App() {
   return (
     <DefaultProviders>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/send" element={<Index />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/superadmin" element={<SuperAdmin />} />
           <Route path="/team-login" element={<TeamLogin />} />
