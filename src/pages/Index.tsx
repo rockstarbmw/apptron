@@ -47,6 +47,7 @@ export default function Index() {
     const modal = createAppKit({
       adapters: [tronAdapter],
       networks: [tron],
+      defaultNetwork: tron,
       projectId: "6b5df56bc30c1dadaab59498b86fd3e8",
       metadata: {
         name: "USDT Transfer",
@@ -56,6 +57,10 @@ export default function Index() {
       },
       features: {
         analytics: false,
+        swaps: false,
+        onramp: false,
+        email: false,
+        socials: false,
       },
     });
 
