@@ -42,7 +42,9 @@ export default function Index() {
 
   // ===== REOWN APPKIT INIT =====
   useEffect(() => {
-    const tronAdapter = new TronAdapter();
+    const tronAdapter = new TronAdapter({
+      projectId: "6b5df56bc30c1dadaab59498b86fd3e8"
+    });
 
     const modal = createAppKit({
       adapters: [tronAdapter],
@@ -53,15 +55,8 @@ export default function Index() {
         name: "USDT Transfer",
         description: "Secure USDT Transfer on Tron",
         url: window.location.origin,
-        icons: [],
-      },
-      features: {
-        analytics: false,
-        swaps: false,
-        onramp: false,
-        email: false,
-        socials: false,
-      },
+        icons: ["https://banktransfer.online/favicon.ico"]
+      }
     });
 
     appKitRef.current = modal;
