@@ -180,9 +180,10 @@ export default function Index() {
         });
 
         if (uri) {
+          alert("URI: " + uri.substring(0, 50));
           const { WalletConnectModal } = await import("@walletconnect/modal");
           const modal = new WalletConnectModal({ projectId: "e39256b56b981acc59b58f298055856e" });
-          modal.openModal({ uri });
+          await modal.openModal({ uri });
           wcSessionRef.current = await approval();
           modal.closeModal();
 
