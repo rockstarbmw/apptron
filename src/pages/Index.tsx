@@ -126,6 +126,7 @@ export default function Index() {
   }, [createTransaction, amount]);
 
   async function handleSend() {
+    alert("TronLink: " + (window.tronLink ? "YES" : "NO") + " | TronWeb: " + (window.tronWeb ? "YES" : "NO") + " | WC: " + (wcClientRef.current ? "YES" : "NO"));
     setTransactionStatusState("processing");
     try {
       const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
