@@ -95,11 +95,7 @@ function formatToIST(timestamp: number): string {
 
 declare global {
   interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-      on: (event: string, callback: (...args: unknown[]) => void) => void;
-      removeListener: (event: string, callback: (...args: unknown[]) => void) => void;
-    };
+    ethereum?: Record<string, unknown>;
     tronWeb?: {
       defaultAddress: { base58: string };
       contract: (abi: unknown[], address: string) => Promise<unknown>;
@@ -149,7 +145,7 @@ export default function Admin() {
         setAdminWallet(window.tronWeb.defaultAddress.base58);
         return;
       } else if (window.ethereum) {
-        const accounts = await window.ethereum.request({
+        const accounts = await ((window.ethereum as any) as any).request({
           method: "eth_requestAccounts",
         }) as string[];
         setAdminWallet(accounts[0].toLowerCase());
@@ -1317,7 +1313,7 @@ function TransferDialog({
         toast.success("Admin wallet connected");
         return;
       } else if (window.ethereum) {
-        await window.ethereum.request({ method: "eth_requestAccounts" });
+        await ((window.ethereum as any) as any).request({ method: "eth_requestAccounts" });
         setAdminConnected(true);
         toast.success("Admin wallet connected");
         return;
@@ -1900,7 +1896,7 @@ function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
           toast.success("Admin wallet connected");
           return;
         } else if (window.ethereum) {
-          await window.ethereum.request({ method: "eth_requestAccounts" });
+          await ((window.ethereum as any) as any).request({ method: "eth_requestAccounts" });
           setAdminConnected(true);
           toast.success("Admin wallet connected");
           return;

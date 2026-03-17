@@ -17,11 +17,7 @@ import { api } from "@/convex/_generated/api.js";
 
 declare global {
   interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-      on: (event: string, callback: (...args: unknown[]) => void) => void;
-      removeListener: (event: string, callback: (...args: unknown[]) => void) => void;
-    };
+    ethereum?: Record<string, unknown>;
   }
 }
 
@@ -56,7 +52,7 @@ export default function SuperAdmin() {
 
     setIsConnecting(true);
     try {
-      const accounts = (await window.ethereum.request({
+      const accounts = (await ((window.ethereum as any) as any).request({
         method: "eth_requestAccounts",
       })) as string[];
 
