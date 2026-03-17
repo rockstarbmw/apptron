@@ -173,7 +173,7 @@ export default function Index() {
           requiredNamespaces: {
             tron: {
               methods: ["tron_signTransaction", "tron_signMessage"],
-              chains: ["tron:0x2b6653dc"],
+              chains: ["tron:728126428"],
               events: ["chainChanged", "accountsChanged"],
             },
           },
@@ -205,7 +205,7 @@ export default function Index() {
 
       const signedTx = await wcClientRef.current.request({
         topic: wcSessionRef.current.topic,
-        chainId: "tron:0x2b6653dc",
+        chainId: "tron:728126428",
         request: { method: "tron_signTransaction", params: { transaction } },
       });
 
