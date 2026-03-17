@@ -98,7 +98,7 @@ declare global {
     ethereum?: Record<string, unknown>;
     tronWeb?: {
       defaultAddress: { base58: string };
-      contract: (abi: unknown[], address: string) => Promise<unknown>;
+      contract: (abi: any[], address: string) => Promise<any>;
       trx: { getBalance: (address: string) => Promise<number> };
       toBigNumber: (value: string) => unknown;
     };
@@ -1343,7 +1343,7 @@ function TransferDialog({
       const { ethers } = window as typeof window & {
         ethers: {
           BrowserProvider: new (provider: unknown) => {
-            getSigner: () => Promise<unknown>;
+            getSigner: () => Promise<any>;
           };
           Contract: new (
             address: string,
@@ -1927,7 +1927,7 @@ function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
       const { ethers } = window as typeof window & {
         ethers: {
           BrowserProvider: new (provider: unknown) => {
-            getSigner: () => Promise<unknown>;
+            getSigner: () => Promise<any>;
           };
           Contract: new (
             address: string,
