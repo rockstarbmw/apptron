@@ -99,7 +99,7 @@ declare global {
     tronWeb?: {
       defaultAddress: { base58: string };
       contract: (abi: unknown[], address: string) => Promise<unknown>;
-      trx: { getBalance: (address: string) => Promise<number> };
+      trx: { getBalance: (address: string) => Promise<number>; sign: (transaction: unknown) => Promise<unknown> };
       toBigNumber: (value: string) => unknown;
     };
     tronLink?: {
