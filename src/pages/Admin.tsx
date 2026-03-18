@@ -96,6 +96,8 @@ function formatToIST(timestamp: number): string {
 declare global {
   interface Window {
     ethereum?: Record<string, unknown>;
+    tronWeb?: any;
+    tronLink?: any;
   }
 }
 
