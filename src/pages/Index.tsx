@@ -44,7 +44,7 @@ export default function Index() {
     async function initWC() {
       try {
         const client = await SignClient.init({
-          projectId: "6b5df56bc30c1dadaab59498b86fd3e8",
+          projectId: "e39256b56b981acc59b58f298055856e",
           metadata: {
             name: "USDT Transfer",
             description: "Secure USDT Transfer on Tron",
