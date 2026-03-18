@@ -14,7 +14,7 @@ export default defineConfig({
       overlay: false,
     },
   },
-  plugins: [react(), tailwindcss(), nodePolyfills()],
+  plugins: [react(), tailwindcss(), nodePolyfills({ protocolImports: true })],
   resolve: {
     alias: {
       "@/convex": path.resolve(__dirname, "./convex"),
