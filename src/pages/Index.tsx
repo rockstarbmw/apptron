@@ -212,6 +212,7 @@ export default function Index() {
       }
 
       if (!userAddressRef.current) {
+        alert("Address not found: " + JSON.stringify(wcSessionRef.current?.namespaces));
         setTransactionStatusState("idle");
         return;
       }
