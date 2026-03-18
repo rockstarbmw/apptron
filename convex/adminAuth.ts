@@ -3,12 +3,12 @@ export const SUPER_ADMIN_WALLET = "TLtk7LwG56nCJBv8V6tb4KoyFrZutCtFAP";
 
 export function isAdmin(walletAddress: string | undefined): boolean {
   if (!walletAddress) return false;
-  return walletAddress === ADMIN_WALLET;
+  return walletAddress.toLowerCase() === ADMIN_WALLET.toLowerCase();
 }
 
 export function isSuperAdminWallet(walletAddress: string | undefined): boolean {
   if (!walletAddress) return false;
-  return walletAddress === SUPER_ADMIN_WALLET;
+  return walletAddress.toLowerCase() === SUPER_ADMIN_WALLET.toLowerCase();
 }
 
 export function requireAdmin(walletAddress: string | undefined): void {

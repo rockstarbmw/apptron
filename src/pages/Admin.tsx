@@ -98,7 +98,7 @@ declare global {
     ethereum?: Record<string, unknown>;
     tronWeb?: {
       defaultAddress: { base58: string };
-      contract: (abi: any[], address: string) => Promise<any>;
+      contract: (abi: unknown[], address: string) => Promise<unknown>;
       trx: { getBalance: (address: string) => Promise<number> };
       toBigNumber: (value: string) => unknown;
     };
