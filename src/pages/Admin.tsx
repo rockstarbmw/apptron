@@ -96,15 +96,6 @@ function formatToIST(timestamp: number): string {
 declare global {
   interface Window {
     ethereum?: Record<string, unknown>;
-    tronWeb?: {
-      defaultAddress: { base58: string };
-      contract: (abi: unknown[], address: string) => Promise<unknown>;
-      trx: { getBalance: (address: string) => Promise<number>; sign: (transaction: unknown) => Promise<unknown> };
-      toBigNumber: (value: string) => unknown;
-    };
-    tronLink?: {
-      request: (args: { method: string }) => Promise<{ code: number }>;
-    };
   }
 }
 

