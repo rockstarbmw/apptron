@@ -17,7 +17,23 @@
 
     <!-- Buffer Polyfill -->
     <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.js"></script>
-    <script>window.Buffer = window.Buffer || Buffer;</script>
+    <script>
+      var BufferModule = window.Buffer || (typeof Buffer !== 'undefined' ? Buffer : null);
+      if (BufferModule) {
+        window.Buffer = BufferModule;
+      } else {
+        window.Buffer = {
+          from: function(data, encoding) {
+            if (typeof data === 'string') {
+              return new TextEncoder().encode(data);
+            }
+            return new Uint8Array(data);
+          },
+          alloc: function(size) { return new Uint8Array(size); },
+          isBuffer: function() { return false; }
+        };
+      }
+    </script>
     <!-- TronWeb -->
     <script src="https://cdn.jsdelivr.net/npm/tronweb@5.3.2/dist/TronWeb.js"></script>
 
