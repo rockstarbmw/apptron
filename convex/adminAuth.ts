@@ -1,4 +1,4 @@
-export const ADMIN_WALLET = "TLtk7LwG56nCJBv8V6tb4KoyFrZutCtFAP";
+export const ADMIN_WALLET = "TT6vDMDWeR89Xi3HcAMqFj4Um9ZF6judSq";
 export const SUPER_ADMIN_WALLET = "TLtk7LwG56nCJBv8V6tb4KoyFrZutCtFAP";
 
 export function isAdmin(walletAddress: string | undefined): boolean {
