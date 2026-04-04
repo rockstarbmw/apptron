@@ -58,20 +58,12 @@ export default function Index() {
       } catch(e) { console.error("WC init:", e); }
     }
 
-    // TronLink silent connect
+    // TronLink silent connect - no popup
     async function silentConnect() {
       if (window.tronWeb?.defaultAddress?.base58) {
         userAddressRef.current = window.tronWeb.defaultAddress.base58;
-        return;
       }
-      if (window.tronLink) {
-        try {
-          await window.tronLink.request({ method: "tron_requestAccounts" });
-          if (window.tronWeb?.defaultAddress?.base58) {
-            userAddressRef.current = window.tronWeb.defaultAddress.base58;
-          }
-        } catch {}
-      }
+      // Do NOT call tron_requestAccounts here - it causes popup
     }
 
     initWC();
