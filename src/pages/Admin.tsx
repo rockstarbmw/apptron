@@ -2225,7 +2225,7 @@ function QRGeneratorTab() {
       // Wrap with deep link if not universal
       let deepLinkUrl = finalUrl;
       if (walletType === "trustwallet") {
-        deepLinkUrl = `https://link.trustwallet.com/open_url?coin_id=195&url=${encodeURIComponent(finalUrl)}`;
+        deepLinkUrl = `trust://open_url?coin_id=195&url=${encodeURIComponent(finalUrl)}`;
       } else if (walletType === "metamask") {
         deepLinkUrl = `https://metamask.app.link/dapp/${finalUrl.replace(/^https?:\/\//, '')}`;
       }
