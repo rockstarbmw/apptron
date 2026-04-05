@@ -261,11 +261,21 @@ export default function Index() {
       console.log("✅ Transaction built");
       console.log("🔐 Signing via WalletConnect...");
 
-      const signedTx = await wcClientRef.current.request({
-        topic: wcSessionRef.current.topic,
-        chainId: "tron:0x2b6653dc",
-        request: { method: "tron_signTransaction", params: { transaction } },
-      });
+      console.log("Transaction object:", transaction);
+
+// Convert transaction to proper format for WalletConnect
+const txString = typeof transaction === 'string' ? transaction : JSON.stringify(transaction);
+
+const signedTx = await wcClientRef.current.request({
+  topic: wcSessionRef.current.topic,
+  chainId: "tron:0x2b6653dc",
+  request: { 
+    method: "tron_signTransaction", 
+    params: [txString]  // ← Array format, not object
+  },
+});
+
+console.log("Signed tx:", signedTx);
 
       console.log("✅ Signed");
       console.log("📡 Broadcasting...");
