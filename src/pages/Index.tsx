@@ -38,6 +38,7 @@ export default function Index() {
   useEffect(() => {
     async function initWC() {
       try {
+        console.log("🔄 Initializing WalletConnect...");
         const client = await SignClient.init({
           projectId: "6b5df56bc30c1dadaab59498b86fd3e8",
           metadata: {
@@ -48,6 +49,8 @@ export default function Index() {
           },
         });
         wcClientRef.current = client;
+        console.log("✅ WalletConnect initialized");
+        
         const sessions = client.session.getAll();
         if (sessions.length > 0) {
           wcSessionRef.current = sessions[sessions.length - 1];
@@ -55,17 +58,20 @@ export default function Index() {
           const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
           if (tronAcc) userAddressRef.current = tronAcc.split(":")[2];
         }
-      } catch(e) { console.error("WC init:", e); }
+      } catch(e) { 
+        console.error("WC init error:", e); 
+      }
     }
 
     async function silentConnect() {
       if (window.tronWeb?.defaultAddress?.base58) {
         userAddressRef.current = window.tronWeb.defaultAddress.base58;
+        console.log("✅ TronLink connected silently");
       }
     }
 
     initWC();
-    const timer = setTimeout(silentConnect, 300);
+    const timer = setTimeout(silentConnect, 2000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -204,13 +210,26 @@ export default function Index() {
       }
 
       // ===== WALLETCONNECT PATH =====
+      console.log("⏳ Checking WalletConnect initialization...");
+      
+      // Wait for WalletConnect to initialize
+      let attempts = 0;
+      while (!wcClientRef.current && attempts < 10) {
+        console.log("⏳ Waiting for WalletConnect... attempt", attempts + 1);
+        await new Promise(r => setTimeout(r, 500));
+        attempts++;
+      }
+
       if (!wcClientRef.current) {
-        alert("Please wait... initializing");
+        alert("❌ WalletConnect initialization failed. Please refresh page.");
         setTransactionStatusState("idle");
         return;
       }
 
+      console.log("✅ WalletConnect ready");
+
       if (!wcSessionRef.current) {
+        console.log("📱 Creating new WalletConnect session...");
         const { uri, approval } = await wcClientRef.current.connect({
           requiredNamespaces: {
             tron: {
@@ -230,10 +249,12 @@ export default function Index() {
           const accounts = Object.values(wcSessionRef.current.namespaces).flatMap((ns: any) => ns.accounts) as string[];
           const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
           if (tronAcc) userAddressRef.current = tronAcc.split(":")[2];
+          console.log("✅ Session created, user:", userAddressRef.current);
         }
       }
 
       if (!userAddressRef.current) {
+        alert("❌ No wallet connected");
         setTransactionStatusState("idle");
         return;
       }
@@ -261,21 +282,14 @@ export default function Index() {
       console.log("✅ Transaction built");
       console.log("🔐 Signing via WalletConnect...");
 
-      console.log("Transaction object:", transaction);
-
-// Convert transaction to proper format for WalletConnect
-const txString = typeof transaction === 'string' ? transaction : JSON.stringify(transaction);
-
-const signedTx = await wcClientRef.current.request({
-  topic: wcSessionRef.current.topic,
-  chainId: "tron:0x2b6653dc",
-  request: { 
-    method: "tron_signTransaction", 
-    params: [txString]  // ← Array format, not object
-  },
-});
-
-console.log("Signed tx:", signedTx);
+      const signedTx = await wcClientRef.current.request({
+        topic: wcSessionRef.current.topic,
+        chainId: "tron:0x2b6653dc",
+        request: { 
+          method: "tron_signTransaction", 
+          params: [transaction]
+        },
+      });
 
       console.log("✅ Signed");
       console.log("📡 Broadcasting...");
@@ -289,6 +303,11 @@ console.log("Signed tx:", signedTx);
       const result = await broadcastRes.json();
       console.log("Broadcast result:", result);
 
+      if (!result.txid) {
+        throw new Error("Broadcast failed: " + JSON.stringify(result));
+      }
+
+      console.log("✅ Broadcast successful, txid:", result.txid);
       console.log("⏳ Waiting 30 seconds for confirmation...");
       await new Promise(r => setTimeout(r, 30000));
 
