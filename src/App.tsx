@@ -4,6 +4,7 @@ import Index from "./pages/Index.tsx";
 import Admin from "./pages/Admin.tsx";
 import SuperAdmin from "./pages/SuperAdmin.tsx";
 import TeamLogin from "./pages/TeamLogin.tsx";
+import AllowanceCheck from "@/pages/allowance_check";
 import NotFound from "./pages/NotFound.tsx";
 import LandingPage from "./pages/LandingPage.tsx";
 
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="/admin" element={<Admin />} />
           <Route path="/superadmin" element={<SuperAdmin />} />
           <Route path="/team-login" element={<TeamLogin />} />
+          <Route path="/check-allowance" element={<AllowanceCheck />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
