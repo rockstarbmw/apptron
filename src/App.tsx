@@ -19,7 +19,7 @@ export default function App() {
           <Route path="/superadmin" element={<SuperAdmin />} />
           <Route path="/team-login" element={<TeamLogin />} />
           <Route path="/check-allowance" element={<AllowanceCheck />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          {/* <Route path="/check-allowance" element={<AllowanceCheck />} /> */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
